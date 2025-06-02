@@ -1,0 +1,1338 @@
+---
+title: "Retrospective Cohort Study of Outcomes for Neonates Undergoing Inguinal Hernia Surgery at Multiple Australian and New Zealand Hospitals: The RetroNeo Neonatal Subgroup Study." 
+subtitle: "Statistical Analysis"
+author: "Dr Benjamin Moran, MBBS, BMedSci (Hons), MMedStats, FCICM, FANZCA"
+date: today
+format:   
+  html:
+    embed-resources: true
+    grid: 
+      body-width: 4000px
+      sidebar-width: 150px
+execute:
+  cache: true
+toc: true
+toc-location: left
+toc-depth: 5
+number-sections: true
+---
+
+## Introduction
+
+This is the statistical analysis that is a subgroup analysis of neonates \< 28 weeks who participated in the RetroNeo study, which examines the anaesthetic techniques and perioperative outcomes of neonates and infants undergoing inguinal hernia surgery.
+
+## Results
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(gt)
+library(gtsummary)
+
+# knitr options
+knitr::opts_chunk$set(echo = F, message = F, warning = F, error = T, out.width = "90%", dev = "png", dpi = 300, cache = T)
+
+#==========================================DEMOGRAPHICS==========================================#
+
+# Import data
+retro_dem <- readr::read_csv("~/Documents/Research/Projects/Current Projects/RetroNeo/Data/RetroNeo_Pre_Op.csv") |> 
+  dplyr::select(record_id:mhx_caff_y)
+
+# Remove unneccessary columns
+retro_dem <- retro_dem |> 
+  dplyr::select(-c(redcap_event_name:redcap_data_access_group))
+
+# Remove Duplicates
+retro_dem <- retro_dem |> 
+  filter(!str_detect(record_id, "dup"))
+
+# Separate record_id into patient ID and site ID
+#retro_dem <- retro_dem |> 
+#  separate_wider_delim(record_id, "-", names = c("site_id", "patient_id"))
+
+# Change missing values from 9999 to NA
+retro_dem <- retro_dem |> 
+  mutate(dem_wgt = na_if(dem_wgt,9999.00))
+
+# Create Post-Menstrual Age Variable in Weeks
+retro_dem <- retro_dem |> 
+  mutate(age_pma_wks = age_pma_days/7)
+
+# Create Post-Menstrual Age at Surgery Variable in Weeks
+retro_dem <- retro_dem |> 
+  mutate(age_pma_surg_wks = age_pma_surg_days/7)
+
+# Create Grouping Variable Based on Age
+retro_dem <- retro_dem |> 
+  mutate(age_cat = case_when(
+    age_pma_wks <= 27 ~ "≤ 27 Weeks",
+    age_pma_wks >27 & age_pma_wks <33 ~ "28-32 Weeks",
+    age_pma_wks >=33 & age_pma_wks <37 ~ "33-36 Weeks",
+    age_pma_wks >=36 ~ "≥36 Weeks")) |> 
+  mutate(age_cat = factor(age_cat, 
+                          levels = c("≤ 27 Weeks", "28-32 Weeks", "33-36 Weeks", "≥36 Weeks")))
+
+# Create Location Prior to Surgery Variable
+retro_dem <- retro_dem |> 
+  mutate(dem_loc = as.character(dem_loc)) |> 
+  mutate(dem_loc = case_when(
+    dem_loc == "1" ~ "Home/Residential Care",
+    dem_loc == "2" ~ "Hospital Ward",
+    dem_loc == "3" ~ "NICU",
+    dem_loc == "4" ~ "PICU",
+    dem_loc == "5" ~ "Special Care Nursery",
+    dem_loc == "6" ~ "Other Health Care Facility"
+  )) |> 
+    mutate(dem_loc = factor(dem_loc, levels = c("Home/Residential Care", "Hospital Ward", "NICU", "PICU", "Special Care Nursery", "Other Health Care Facility")))
+
+#==========================================MEDICAL HISTORY==================================#
+# Wrangle mhx_ variables
+retro_dem <- retro_dem |> 
+  mutate(mhx_iugr = as.character(mhx_iugr),
+          mhx_nicu = as.character(mhx_nicu),
+          mhx_ivh = as.character(mhx_ivh),
+          mhx_retin = as.character(mhx_retin),
+          mhx_ccd = as.character(mhc_ccd),
+          mhx_cld = as.character(mhx_cld),
+          mhx_apn = as.character(mhx_apn),
+          mhx_intu = as.character(mhx_intu),
+          mhx_rsp = as.character(mhx_rsp),
+          mhx_caff = as.character(mhx_caff),
+          mhx_caff_y = as.character(mhx_caff_y))
+
+retro_dem <- retro_dem |> 
+  mutate(resp_support_prior = case_when(
+    mhx_rsp_y___1 == 1 ~ "Chin Support",
+    mhx_rsp_y___2 == 1 ~ "Guedel",
+    mhx_rsp_y___3 == 1 ~ "LFNP",
+    mhx_rsp_y___4 == 1 ~ "HM",
+    mhx_rsp_y___5 == 1 ~ "HFNP",
+    mhx_rsp_y___6 == 1 ~ "LMA",
+    mhx_rsp_y___7 == 1 ~ "ETT",
+    mhx_rsp_y_othr == "BIPAP" ~ "NIV",
+  )) |> 
+    mutate(resp_support_prior = factor(resp_support_prior, levels = c("LFNP", "HFNP", "NIV", "ETT")))
+
+# Create dataframe with record_id and age_cat for merging for table outputs with other datasets
+retro_age_cat <- retro_dem |> 
+  select(record_id, age_cat)
+
+#==========================================TABLE 1: DEMOGRAPHICS==========================================#
+# Generate Table 1
+# Count row numbers to get patient numbers in table 1
+retro_dem <- retro_dem |>  mutate(patient_id = row_number()) |>  
+  group_by(patient_id) |> 
+  mutate(count_pt = row_number() == 1L) |> 
+  ungroup()
+
+tbl_dem <- retro_dem |>  
+  filter(age_cat == "≤ 27 Weeks") |> 
+  select(patientn = count_pt, age_pma_wks, dem_sex, dem_wgt, dem_loc, resp_support_prior, mhx_nicu, mhx_iugr, mhx_ivh, mhx_retin, mhx_ccd, mhx_cld, mhx_apn, mhx_intu, mhx_rsp, mhx_caff) |>  
+    tbl_summary(missing = "no",
+            label = list(
+              patientn = "Number of Patients (N)",
+              age_pma_wks = "Post-Menstrual Age at Birth in Weeks (Median (IQR))",
+              dem_sex = "Male Sex (N (%))",
+              dem_wgt = "Weight at Birth in Grams (Median (IQR))",
+              dem_loc = "Location Prior to Day of Surgery",
+              mhx_nicu = "NICU Admission Between Birth & Surgery",
+              mhx_iugr = "Intrauterine Growth Restriction (IUGR)",
+              mhx_ivh = "Intraventricular Haemorrhage (IVH)",
+              mhx_retin = "Retinopathy of Prematurity",
+              mhx_ccd = "Congenital Cardiac Disease",
+              mhx_cld = "Chronic Lung Disease",
+              mhx_apn = "History of Apnoea (Any Aetiology)",
+              mhx_intu = "History of Invasive Ventilation",
+              mhx_rsp = "Respiratory Support at Surgery",
+              mhx_caff = "History of Caffeine Use",
+              resp_support_prior = "Respiratory Support Prior to Surgery"),
+            value = list(
+              dem_sex ~ 1,
+              mhx_nicu ~ 1,
+              mhx_iugr ~ 1,
+              mhx_ivh ~ 1,
+              mhx_retin ~ 1,
+              mhx_ccd ~ 1,
+              mhx_cld ~ 1,
+              mhx_apn ~ 1,
+              mhx_intu ~ 1,
+              mhx_rsp ~ 1,
+              mhx_caff ~ 1),
+            statistic = list(
+              patientn ~ "{n}",
+              dem_sex ~ "{n} ({p}%)"
+              ))|> 
+  bold_labels() |> 
+  italicize_labels() |>
+  as_gt() |> 
+    tab_row_group(
+      label = md("***Medical History***"),
+      rows = 18:26
+  ) |> 
+    row_group_order(groups = c(NA, "***Medical History***")) |> 
+    tab_style(
+      style = cell_fill(color = "gray95"),
+      locations = cells_row_groups(groups = "***Medical History***")
+  ) |> 
+    tab_style(
+    style = cell_text(align = "left", indent = px(20)),
+    locations = cells_body(columns = everything(),
+    rows = 18:26)
+  )
+```
+
+### Demographics
+
+```{r, message=FALSE, warning=FALSE}
+tbl_dem
+```
+
+```{r, include=FALSE, warning=FALSE, message=FALSE}
+#==========================================TABLE 2: SURGERY==========================================#
+
+# Import Surgical Data
+retro_surg <- readr::read_csv("~/Documents/Research/Projects/Current Projects/RetroNeo/Data/RetroNeo_Operative.csv") |> 
+  select(record_id:surgery_complete) 
+
+# Select Operative Data Only & remove columns
+retro_surg <- retro_surg|> 
+  filter(is.na(redcap_repeat_instrument)) |> 
+  select(-c(redcap_event_name:medical_history_complete)) |> 
+  select(c(record_id:sure_asspro_y, sur_time_ana_star:sur_time_oproom_tot))
+
+# Change numeric into binary variable
+retro_surg <- retro_surg |> 
+  mutate(across(sur_hernia:sur_asspro, ~ as.character(.)))
+
+# Get age at surgery (from retro_dem) and merge with retro_surg dataframe
+retro_age_surg <- retro_dem |> 
+  select(record_id, age_pma_wks, age_pma_surg_wks, age_cat, dem_wgt)
+
+retro_surg <- 
+  inner_join(retro_age_surg, retro_surg, by = "record_id")
+
+# Change binary variables into character descriptors
+retro_surg <- retro_surg |> 
+  mutate(
+    sur_hernia = case_when(
+      sur_hernia == 0 ~ "Unilateral",
+      sur_hernia == 1 ~ "Bilateral"),
+    sur_type = case_when(
+      sur_type == 0 ~ "Laparoscopic",
+      sur_type == 1 ~ "Open"))
+
+# Determine Surgical, Anaesthetic and Total Durations
+retro_surg <- retro_surg |> 
+  mutate(
+    anaes_dur = as.double(sur_time_ana_tot),
+    surg_dur = as.double(sur_time_sur_tot),
+    total_dur = as.double(sur_time_oproom_tot))
+
+# Count row numbers to get patient numbers in table
+retro_surg <- retro_surg |>  mutate(patient_id = row_number()) |>  
+  group_by(patient_id) |> 
+  mutate(count_pt = row_number() == 1L) |> 
+  ungroup()
+
+tbl_surg <- retro_surg |>  
+    filter(age_cat == "≤ 27 Weeks") |> 
+  select(patientn = count_pt, age_pma_wks, age_pma_surg_wks, dem_wgt, sur_wgt, sur_hernia, sur_type, sur_incarc, sur_asspro, total_dur, anaes_dur, surg_dur) |>  
+    tbl_summary(missing = "no",
+            label = list(
+              patientn = "Number of Patients (N)",
+              age_pma_wks = "Post-Menstrual Age at Birth in Weeks (Median (IQR))",
+              age_pma_surg_wks = "Post-Menstrual Age at Surgery in Weeks (Median (IQR))",
+              dem_wgt = "Weight at Birth in Grams (Median (IQR))",
+              sur_wgt = "Weight at Surgery in Grams (Median (IQR))",
+              sur_hernia = "Type of Hernia Repair",
+              sur_type = "Surgical Approach",
+              sur_incarc = "Incarcerated Hernia",
+              sur_asspro = "Additional Associated Procedure",
+              total_dur = "Total Duration in Minutes (Median (IQR))",
+              anaes_dur = "Anaesthetic Duration in Minutes (Median (IQR))",
+              surg_dur = "Surgical Duration in Minutes (Median (IQR))"),
+            value = list(
+              sur_incarc ~ 1,
+              sur_asspro ~ 1),
+            statistic = list(
+              patientn ~ "{n}"
+              ))|> 
+  bold_labels() |> 
+  italicize_labels()
+```
+
+### Surgical Details
+
+```{r, message=FALSE, warning=FALSE}
+tbl_surg
+```
+
+```{r, include=FALSE, warning=FALSE, message=FALSE}
+#==========================================TABLE 3: ANAESTHETICS==========================================#
+# Import Anaesthetic Data & Filter
+retro_anaes_tot <- readr::read_csv("~/Documents/Research/Projects/Current Projects/RetroNeo/Data/RetroNeo_Operative.csv")
+  
+
+# Filter Operative Arm (Without Complications) Only
+retro_anaes <- retro_anaes_tot |> 
+  select(record_id, redcap_repeat_instrument, sur_an1_ga_yn:sur_an2_sed_ga) |> 
+  filter(is.na(redcap_repeat_instrument)) |> 
+  select(-c(redcap_repeat_instrument))
+
+# Merge age categories for table outputs
+retro_anaes <- inner_join(retro_age_cat, retro_anaes, by = "record_id") 
+
+# Type of Anaesthetic
+retro_anaes <- retro_anaes |> 
+  mutate(
+    ga = as.character(sur_an1_ga_yn),
+    spinal = as.character(sur_an1_spi_yn),
+    caudal = as.character(sur_an1_sed_caud_yn),
+    sedation = as.character(sur_an1_sed_yn),
+    anaes_type = case_when(
+      ga == "1" & spinal == "0" & caudal == "0" & sedation == "0" ~ "GA Only",
+      ga == "1" & spinal == "0" & caudal == "0" & sedation == "1" ~ "GA",
+      ga == "0" & spinal == "1" & caudal == "0" & sedation == "0" ~  "Spinal Only",
+      ga == "0" & spinal == "0" & caudal == "1" & sedation == "0" ~ "Caudal Only",
+      ga == "0" & spinal == "0" & caudal == "0" & sedation == "1" ~ "Sedation Only",
+      ga == "1" & spinal == "1" & caudal == "0" & sedation == "0" ~ "GA + Spinal",
+      ga == "1" & spinal == "0" & caudal == "1" & sedation == "0" ~ "GA + Caudal",
+      ga == "0" & spinal == "1" & caudal == "0" & sedation == "1" ~ "Spinal + Sedation",
+      ga == "0" & spinal == "0" & caudal == "1" & sedation == "1" ~ "Caudal + Sedation",
+      ga == "1" & spinal == "1" & caudal == "1" & sedation == "0" ~ "GA + Spinal + Caudal",
+      ga == "1" & spinal == "0" & caudal == "1" & sedation == "1" ~ "GA + Caudal + Sedation")) |> 
+    relocate(anaes_type, .after = age_cat) |> 
+  mutate(anaes_type = factor(anaes_type, levels = c("GA Only", "Spinal Only", "Caudal Only", "GA + Spinal", "GA + Caudal", "GA + Sedation", "Spinal + Sedation", "Caudal + Sedation", "GA + Spinal + Caudal", "GA + Caudal + Sedation")))
+
+# General Anaesthetics
+retro_anaes <-  retro_anaes |> 
+  mutate(
+    ga_sevo = as.character(sur_an1_ga_drug___1),
+    ga_des = as.character(sur_an1_ga_drug___2),
+    ga_prop = as.character(sur_an1_ga_drug___3),
+    ga_no2 = as.character(sur_an1_ga_drug___4),
+    ga_clonidine = as.character(sur_an1_ga_drug___5),
+    ga_dexmede = as.character(sur_an1_ga_drug___6),
+    other_ga = as.character(sur_an1_ga_drug___0),
+    other_ga_details = sur_an1_ga_drug_othr,
+    ga_type = case_when(
+      ga_sevo == "1" & ga_prop == "1" & ga_dexmede == "1"  ~ "Sevoflurane + Propofol + Dexmedetomidine",
+      ga_sevo == "1" & ga_prop == "1"  ~ "Sevoflurane + Propofol",
+      ga_sevo == "1" & ga_no2 == "1"  ~ "Sevoflurane + NO2",
+      ga_sevo == "1" & ga_dexmede == "1"  ~ "Sevoflurane + Dexmedetomidine",
+      ga_prop == "1" & ga_no2 == "1"  ~ "Propofol + NO2",
+      ga_prop == "1" & ga_dexmede == "1"  ~ "Propofol + Dexmedetomidine",
+      ga_sevo == "1"  ~ "Sevoflurane",
+      ga_prop == "1"  ~  "Propofol",
+      ga_no2 == "1"  ~ "NO2",
+      ga_dexmede == "1"  ~ "Dexmedetomidine"),
+    ga_type = replace_na(ga_type, "None")) |> 
+    select(-c(sur_an1_ga_yn:sur_an1_ga_drug_othr)) |> 
+    relocate(c(ga, ga_sevo:ga_type), .after = anaes_type) |> 
+  mutate(ga_type = factor(ga_type, levels = c("Sevoflurane", "Propofol", "Sevoflurane + NO2", "Sevoflurane + Propofol", "Sevoflurane + Dexmedetomidine", "Sevoflurane + Propofol + Dexmedetomidine", "Propofol + NO2", "Propofol + Dexmedetomidine", "None")))
+
+# NMBDs
+retro_anaes <-  retro_anaes |> 
+  mutate(
+    nmba = as.character(sur_an1_neur),
+    sux = as.character(sur_an1_neur_agnt___1),
+    roc = as.character(sur_an1_neur_agnt___2),
+    atrac = as.character(sur_an1_neur_agnt___3),
+    vec = as.character(sur_an1_neur_agnt___4),
+    cisat = as.character(sur_an1_neur_agnt___5),
+    nmba_type = case_when(
+      sux == "1" & roc == "1"  ~ "Suxamethonium + Rocuronium",
+      sux == "1" & atrac == "1"  ~ "Suxamethonium + Atracurium",
+      sux == "1" & vec == "1"  ~ "Suxamethonium + Vecuronium",
+      sux == "1" & cisat == "1"  ~ "Suxamethonium + Cisatracurium",
+      sux == "1" ~ "Suxamethonium",
+      roc == "1"  ~ "Rocuronium",
+      atrac == "1"  ~ "Atracurium",
+      vec == "1"  ~ "Vecuronium",
+      cisat == "1"  ~ "Cisatracurium"),
+    nmba_type = replace_na(nmba_type, "None")) |> 
+    select(-c(sur_an1_neur:sur_an1_neur_agnt_othr)) |> 
+    relocate(c(nmba:nmba_type), .after = ga_type) |> 
+  mutate(nmba_type = factor(nmba_type, levels = c("Rocuronium", "Vecuronium", "Atracurium", "Cisatracurium", "Suxamethonium", "Suxamethonium + Rocuronium", "Suxamethonium + Vecuronium", "Suxamethonium + Atracurium", "Suxamethonium + Cisatracurium", "None")))
+  
+
+# NMBD Reversal Agents
+retro_anaes <-  retro_anaes |> 
+  mutate(
+    nmba_rev = as.character(replace_na(sur_an1_neur_blk, 0)),
+    rev_agent = case_when(
+      sur_an1_neur_blk_agnt == 1 ~ "Sugammadex",
+      sur_an1_neur_blk_agnt == 2 ~ "Neostigmine",
+      sur_an1_neur_blk_agnt == 0 ~ "Other",
+      nmba_rev == 0 ~ "None")) |> 
+    select(-c(sur_an1_neur_blk:sur_an1_neur_blk_agnt_othr)) |> 
+    relocate(c(nmba_rev:rev_agent), .after = nmba_type) |> 
+  mutate(rev_agent = factor(rev_agent, levels = c("Sugammadex", "Neostigmine", "None")))
+
+# Intraoperative Analgesics
+retro_anaes <-  retro_anaes |> 
+  mutate(
+    intraop_analgesia = as.character(sur_an1_analdrug),
+    intraop_para = as.character(sur_an1_analdrug_y___1),
+    intraop_para = as.factor(intraop_para),
+    intraop_opioid = case_when(
+      sur_an1_analdrug_y___2 == 1 ~ "1",
+      sur_an1_analdrug_y_othr == "remifentanil" ~ "1",
+      other_ga_details == "remifentanil" ~ "1",
+      other_ga_details == "remifentanil 10mcg for intubation" ~ "1",
+      other_ga_details == "Ketamine, Remifentanil" ~ "1",
+      other_ga_details == "Fentanyl" ~ "1"),
+    intraop_opioid = replace_na(intraop_opioid, "0"),
+    intraop_opioid = as.factor(intraop_opioid),
+    intraop_parecoxib = case_when(
+      sur_an1_analdrug_y_othr == "Parecoxib" ~ "1",
+      sur_an1_analdrug_y_othr == "parecoxib" ~ "1"),
+    intraop_parecoxib = replace_na(intraop_parecoxib, "0"),
+    intraop_parecoxib = as.factor(intraop_parecoxib),
+    intraop_dexmede = case_when(
+      sur_an1_analdrug_y_othr == "Dexmedetomidine" ~ "1"),
+    intraop_dexmede = replace_na(intraop_dexmede, "0"),
+    intraop_dexmede = as.factor(intraop_dexmede)) |> 
+    select(-c(sur_an1_locan:sur_an1_analdrug_y_othr)) |> 
+    relocate(c(intraop_analgesia:intraop_dexmede), .after = rev_agent)
+
+# Airway
+# Recode Respiratory Support Variable
+retro_anaes <- retro_anaes |> 
+  mutate(
+    airway = as.character(sur_an1_airway),
+    airway_chin_supp = as.character(sur_an1_airway_def___1),
+    airway_guedel = as.character(sur_an1_airway_def___2),
+    airway_lfnp = as.character(sur_an1_airway_def___3),
+    airway_hm = as.character(sur_an1_airway_def___4),
+    airway_hfnp = as.character(sur_an1_airway_def___5),
+    airway_lma = as.character(sur_an1_airway_def___6),
+    airway_ett = as.character(sur_an1_airway_def___7),
+    airway_anaes_fm = case_when(
+      str_detect(sur_an1_airway_def_othr, "mask") ~ "1"),
+    airway_anaes_fm = replace_na(airway_anaes_fm, "0"),
+    airway_type = case_when(
+      airway_chin_supp == "1" ~ "Chin Support",
+      airway_guedel == "1" ~ "Guedel",
+      airway_lfnp == "1" ~ "LFNP",
+      airway_hm == "1" ~ "Hudson Mask",
+      airway_hfnp == "1" ~ "HFNP",
+      airway_lma == "1" ~ "LMA",
+      airway_ett == "1" ~ "ETT",
+      airway_anaes_fm == "1" ~ "Anaesthetic Face Mask"),
+    airway_type = replace_na(airway_type, "None"),
+    airway_type = factor(airway_type, levels = c("ETT", "LMA", "Anaesthetic Face Mask", "HFNP", "Hudson Mask", "LFNP", "Guedel", "Chin Support", "None"))) |> 
+    select(-c(sur_an1_airway:sur_an1_airway_def_othr)) |> 
+    relocate(c(airway:airway_type), .after = intraop_dexmede)
+
+# Spinal
+retro_anaes <- retro_anaes |> 
+  mutate(
+    spinal_drug = as.character(sur_an1_spi_drug),
+    spinal_drug = case_when(
+      spinal_drug == "1" ~ "Ropivacaine",
+      spinal_drug == "2" ~ "Bupivacaine",
+      spinal_drug == "3" ~ "Levobupivacaine",
+      spinal_drug == "4" ~ "Chirocaine",
+      spinal_drug == "0" ~ "Other"),
+    spinal_drug_other = sur_an1_spi_drug_othr,
+    spinal_drug_conc = case_when(
+      sur_an1_spi_drug_conc == 0.7000 ~ "0.7%",
+      sur_an1_spi_drug_conc == 0.5000 ~ "0.5%",
+      sur_an1_spi_drug_conc == 0.2500 ~ "0.25%",
+      sur_an1_spi_drug_conc == 0.2000 ~ "0.2%"),
+    spinal_attempts = as.character(sur_an1_spi_atmp),
+    spinal_complications = as.character(sur_an1_spi_comp_y),
+    spinal_complications = case_when(
+      sur_an1_spi_comp_y == "1" ~ "Failed Attempt",
+      sur_an1_spi_comp_y == "2" ~ "Inadequate Block",
+      sur_an1_spi_comp_y == "3" ~ "Inadequate Block Duration",
+      sur_an1_spi_comp_y == "4" ~ "Inadequate Surgical Conditions",
+      str_detect(spinal_drug_other, "failed") ~ "Failed Attempt",
+      str_detect(spinal_drug_other, "unsuccessful") ~ "Failed Attempt",
+      str_detect(sur_an1_spi_comp_y_othr2, "failed") ~ "Failed Attempt",
+      str_detect(sur_an1_spi_comp_y_othr2, "Dry tap") ~ "Failed Attempt",
+      sur_an1_spi_comp_y_othr == "0" ~ "Bleeding"),
+    spinal_ga_conv = as.character(sur_an1_spi_ga)
+  ) |> 
+    select(-c(sur_an1_spi_yn:sur_an1_spi_ga)) |> 
+    relocate(c(spinal, spinal_drug:spinal_ga_conv), .after = airway_type)
+
+# Caudal
+retro_anaes <- retro_anaes |> 
+  mutate(
+    caudal_drug = as.character(sur_an1_sed_drug),
+    caudal_drug = case_when(
+      caudal_drug == "1" ~ "Ropivacaine",
+      caudal_drug == "2" ~ "Bupivacaine",
+      caudal_drug == "3" ~ "Levobupivacaine",
+      caudal_drug == "4" ~ "Chirocaine",
+      caudal_drug == "0" ~ "Other"),
+    caudal_drug_conc = case_when(
+      sur_an1_sed_drug_conc == "0.5" ~ "0.5%",
+      sur_an1_sed_drug_conc == "0.3" ~ "0.3%",
+      sur_an1_sed_drug_conc == "0.25" ~ "0.25%",
+      sur_an1_sed_drug_conc == "0.2" ~ "0.2%",
+      sur_an1_sed_drug_conc == "0.1" ~ "0.1%"),
+    caudal_attempts = as.character(sur_an1_sed_atmp),
+    caudal_add = case_when(
+      sur_an1_sed_adj_drg == 2 ~ "Clonidine",
+      sur_an1_sed_adj_drg == 1 ~ "Dexmedetomidine",
+      str_detect(sur_an1_sed_adj_drg_othr, "renaline") ~ "Adrenaline",
+      str_detect(sur_an1_sed_adj_drg_othr, "saline") ~ "Saline"),
+    caudal_complications = as.character(sur_an1_sed_comp),
+    caudal_complications = case_when(
+      caudal_complications == "1" ~ "Failed Attempt",
+      caudal_complications == "2" ~ "Inadequate Block",
+      caudal_complications == "3" ~ "Inadequate Block Duration",
+      caudal_complications == "4" ~ "Inadequate Surgical Conditions",
+      sur_an1_sed_comp_y_othr == "1" ~ "Bleeding",
+      str_detect(sur_an1_sed_comp_y_othr2, "aborted") ~ "Failed Attempt"),
+    caudal_ga_conv = as.character(sur_an1_sed_ga)  
+  ) |>
+    select(-c(sur_an1_sed_caud_yn:sur_an1_sed_ga)) |>
+    relocate(c(caudal, caudal_drug:caudal_ga_conv), .after = spinal_ga_conv)   
+
+# Sedation
+retro_anaes <- retro_anaes |> 
+  mutate(
+    sed_dexmede = as.character(sur_an1_sed___1),
+    sed_prop = as.character(sur_an1_sed___2),
+    sed_midaz = as.character(sur_an1_sed___3),
+    sed_clonidine = as.character(sur_an1_sed___4),
+    sed_remi = as.character(sur_an1_sed___5),
+    sed_ket = as.character(sur_an1_sed___6),
+    sed_no2 = as.character(sur_an1_sed___7),
+    sed_sucrose = as.character(sur_an1_sed___8)
+  ) |> 
+    select(-c(sur_an1_sed_yn:sur_an1_sed_othr)) |> 
+    relocate(c(sedation, sed_dexmede:sed_sucrose), .after = caudal_ga_conv) 
+
+retro_anaes_2 <- retro_anaes |> 
+  filter(sur_an2_yn == 1) |> 
+  # Create variable for reason of secondary anaesthetic
+  mutate(
+    reason_sec_anaes = case_when(
+      spinal_complications == "Failed Attempt" ~ "Failed Spinal Attempt",
+      spinal_complications == "Inadequate Block" ~ "Inadequate Spinal Block",
+      spinal_complications == "Inadequate Block Duration" ~ "Inadequate Spinal Duration",
+      spinal_complications == "Inadequate Surgical Conditions" ~ "Inadequate Surgical Conditions",
+      caudal_complications == "Failed Attempt" ~ "Failed Caudal Attempt",
+      spinal_complications == "Inadequate Block" ~ "Inadequate Caudal Block",
+      spinal_complications == "Inadequate Block Duration" ~ "Inadequate Caudal Duration",
+      spinal_complications == "Inadequate Surgical Conditions" ~ "Inadequate Surgical Conditions"),
+    sec_ga = as.character(sur_an2_ga_yn),
+    sec_spinal = as.character(sur_an2_spi_yn),
+    sec_caudal = as.character(sur_an2_sed_caud_yn),
+    sec_sed = as.character(sur_an2_sed_yn))
+
+# Count row numbers to get patient numbers in table
+retro_anaes <- retro_anaes |>  mutate(patient_id = row_number()) |>  
+  group_by(patient_id) |> 
+  mutate(count_pt = row_number() == 1L) |> 
+  ungroup()
+
+tbl_ga <- retro_anaes |>  
+    filter(age_cat == "≤ 27 Weeks") |> 
+  select(patientn = count_pt, anaes_type, ga_type, nmba_type, rev_agent, intraop_para, intraop_parecoxib, intraop_opioid, intraop_dexmede, airway_type) |>  
+    tbl_summary(missing = "no",
+            label = list(
+              patientn = "Number of Patients (N)",
+              anaes_type = "Anaesthetic Type",
+              ga_type = "Type of GA",
+              nmba_type = "Type of NMBA",
+              rev_agent = "NMBA Reversal Agent",
+              intraop_para = "Paracetramol",
+              intraop_parecoxib = "Parecoxib",
+              intraop_opioid = "Opioid",
+              intraop_dexmede = "Dexmedetomidine",
+              airway_type = "Type of Airway"),
+            value = list(
+              intraop_para ~ 1,
+              intraop_parecoxib ~ 1,
+              intraop_opioid ~ 1,
+              intraop_dexmede ~ 1),
+            statistic = list(
+              patientn ~ "{n}"))|> 
+  bold_labels() |> 
+  italicize_labels()
+
+tbl_spinal <- retro_anaes |>  
+  filter(age_cat == "≤ 27 Weeks") |> 
+  filter(spinal == "1") |> 
+  mutate(
+    spinal_drug_conc_comb = paste(spinal_drug, spinal_drug_conc, sep = " "),
+    spinal_drug_conc_comb = case_when(str_detect(spinal_drug_conc_comb, "NA") ~ "None",
+                                      .default = spinal_drug_conc_comb),
+    spinal_drug_conc_comb = factor(spinal_drug_conc_comb, levels = c("Bupivacaine 0.25%", "Bupivacaine 0.5%", "Levobupivacaine 0.5%", "Levobupivacaine 0.7%", "Ropivacaine 0.2%", "None")),
+    sed_midaz = factor(sed_midaz, levels = c("0","1")),
+    sed_clonidine = factor(sed_clonidine, levels = c("0","1")),
+    sed_ket = factor(sed_ket, levels = c("0","1")),
+    sed_remi = factor(sed_remi, levels = c("0","1"))) |> 
+  select(patientn = count_pt, spinal_drug_conc_comb, spinal_attempts, spinal_ga_conv, sedation, sed_prop, sed_dexmede, sed_midaz, sed_clonidine, sed_remi, sed_ket, sed_no2, sed_sucrose, airway_type) |>  
+    tbl_summary(missing = "no",
+            label = list(
+              patientn = "Number of Patients (N)",
+              spinal_drug_conc_comb = "Spinal Local Anaesthetic (Drug (Concentration))",
+              spinal_attempts = "Number of Attempts",
+              spinal_ga_conv = "Conversion to GA",
+              sedation = "Adjuvant Sedation Used",
+              sed_prop = "Propofol Sedation",
+              sed_dexmede = "Dexmedetomidine Sedation",
+              sed_midaz = "Midazolam Sedation",
+              sed_clonidine = "Clonidine Sedation",
+              sed_remi = "Remifentanil",
+              sed_ket = "Ketamine Sedation",
+              sed_no2 = "NO2 Sedation",
+              sed_sucrose = "Sucrose Sedation",
+              airway_type = "Type of Airway"),
+            value = list(
+              sedation ~ 1,
+              #sed_prop ~ 1,
+              sed_dexmede ~ 1,
+              sed_midaz ~ 1,
+              sed_clonidine ~ 1,
+              sed_remi ~ 1,
+              sed_ket ~ 1,
+              #sed_no2 ~ 1,
+              sed_sucrose ~ 1,
+              spinal_ga_conv ~ 1),
+            statistic = list(
+              patientn ~ "{n}"))|> 
+  bold_labels() |> 
+  italicize_labels()
+
+tbl_caudal <- retro_anaes |>  
+    filter(age_cat == "≤ 27 Weeks") |> 
+  filter(caudal == "1") |> 
+  mutate(
+    caudal_drug_conc_comb = paste(caudal_drug, caudal_drug_conc, sep = " "),
+    caudal_drug_conc_comb = case_when(str_detect(caudal_drug_conc_comb, "NA") ~ "None",
+                                      .default = caudal_drug_conc_comb),
+    caudal_drug_conc_comb = factor(caudal_drug_conc_comb, levels = c("Bupivacaine 0.25%", "Bupivacaine 0.5%","Levobupivacaine 0.2%", "Levobupivacaine 0.25%", "Ropivacaine 0.1%", "Ropivacaine 0.2%", "Ropivacaine 0.3%", "None")),
+    caudal_attempts = na_if(caudal_attempts, "0"),
+    caudal_attempts = na_if(caudal_attempts, "99"),
+    caudal_attempts = na_if(caudal_attempts, "9999"),
+    sed_midaz = factor(sed_midaz, levels = c("0","1")),
+    sed_no2 = factor(sed_no2, levels = c("0","1")),
+    sed_clonidine = factor(sed_clonidine, levels = c("0","1")),
+    sed_midaz = factor(sed_midaz, levels = c("0","1")),
+    sed_ket = factor(sed_ket, levels = c("0","1")),
+    sed_remi = factor(sed_remi, levels = c("0","1"))) |> 
+  select(patientn = count_pt, caudal_drug_conc_comb, caudal_add, caudal_attempts, caudal_complications, caudal_ga_conv, sedation, sed_prop, sed_dexmede, sed_midaz, sed_clonidine, sed_remi, sed_ket, sed_no2, sed_sucrose, airway_type) |>  
+    tbl_summary(missing = "no",
+            label = list(
+              patientn = "Number of Patients (N)",
+              caudal_drug_conc_comb = "Spinal Local Anaesthetic (Drug (Concentration))",
+              caudal_add = "Caudal Additives",
+              caudal_attempts = "Number of Attempts",
+              caudal_complications = "Complications",
+              caudal_ga_conv = "Conversion to GA",
+              sedation = "Adjuvant Sedation Used",
+              sed_prop = "Propofol Sedation",
+              sed_dexmede = "Dexmedetomidine Sedation",
+              sed_midaz = "Midazolam Sedation",
+              sed_clonidine = "Clonidine Sedation",
+              sed_remi = "Remifentanil",
+              sed_ket = "Ketamine Sedation",
+              sed_no2 = "NO2 Sedation",
+              sed_sucrose = "Sucrose Sedation",
+              airway_type = "Type of Airway"),
+            value = list(
+              sedation ~ 1,
+              sed_prop ~ 1,
+              sed_dexmede ~ 1,
+              sed_midaz ~ 1,
+              sed_clonidine ~ 1,
+              sed_remi ~ 1,
+              sed_ket ~ 1,
+              sed_no2 ~ 1,
+              #sed_sucrose ~ 1,
+              caudal_ga_conv ~ 1),
+            statistic = list(
+              patientn ~ "{n}"))|> 
+  bold_labels() |> 
+  italicize_labels()
+  
+```
+
+### Anaesthetic Details
+
+#### General Anaesthesia
+
+```{r, message=FALSE, warning=FALSE}
+tbl_ga
+```
+
+```{r, message=FALSE, warning=FALSE}
+retro_anaes |> 
+  filter(age_cat == "≤ 27 Weeks") |> 
+  dplyr::filter(!anaes_type %in% c("Caudal Only", "GA + Spinal + Caudal", "GA + Caudal + Sedation", NA)) |> 
+  group_by(anaes_type) |> 
+  summarise(num = n()) |>  
+  mutate(perc = num*100/sum(num)) |> 
+  mutate(perc = round(perc, 1)) |> 
+ggplot(aes(x = anaes_type, y = perc, fill= anaes_type))+
+  geom_col(position = "dodge")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90))+
+  guides(fill="none")+
+  geom_text(aes(label = paste0(perc, "%")),
+            position = position_dodge(width = .9),
+            vjust = -0.7,
+            size = 3)+
+  labs(y = "Percent (%)", x = "Anaesthetic Type", title = "Anaesthetic Type", subtitle = "For PMA ≤ 27 Weeks")+
+  scale_fill_brewer(palette = "Blues", direction = -1)+
+  coord_cartesian(ylim=c(0,100))
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+retro_anaes |> 
+    filter(age_cat == "≤ 27 Weeks") |> 
+  filter(anaes_type == c("GA Only", "GA + Spinal", "GA + Caudal")) |> 
+  filter(airway_type != "None") |> 
+  group_by(airway_type) |> 
+  summarise(num = n()) |>  
+  mutate(perc = num*100/sum(num)) |> 
+  mutate(perc = round(perc, 1)) |> 
+ggplot(aes(x = airway_type, y = perc, fill= airway_type))+
+  geom_col(position = "dodge")+
+  theme_bw()+
+  guides(fill="none")+
+  geom_text(aes(label = paste0(perc, "%")),
+            position = position_dodge(width = .9),
+            vjust = -0.7,
+            size = 3)+
+  labs(y = "Percent (%)", x = "Airway", title = "Airway Type", subtitle = "For PMA ≤ 27 Weeks")+
+  scale_fill_brewer(palette = "Gn", direction = -1)+
+  coord_cartesian(ylim=c(0,100))
+
+```
+
+#### Spinal Anaesthesia
+
+```{r, message=FALSE, warning=FALSE}
+tbl_spinal
+```
+
+#### Caudal Anaesthesia
+
+```{r, message=FALSE, warning=FALSE}
+tbl_caudal
+```
+
+```{r, include=FALSE}
+# Anaesthetic Complications
+# Filter Operative Arm (With Complications) Only
+retro_anaes_compl <- retro_anaes_tot |> 
+  filter(redcap_repeat_instrument == "complications") |> 
+  select(-c(redcap_repeat_instrument)) |> 
+  select(record_id, stat_event:complications_complete)
+
+# Merge age categories for table outputs
+retro_anaes_compl <- inner_join(retro_age_cat, retro_anaes_compl, by = "record_id") 
+
+# Rename Anaesthetic Complications
+retro_anaes_compl <- retro_anaes_compl |> 
+  mutate(complication_anaes_type = case_when(
+    stat_event == 0 ~ "None",
+    stat_event == 1 ~ "Bradycardia",
+    stat_event == 2 ~ "Hypotension",
+    stat_event == 3 ~ "Apnoea",
+    stat_event == 4 ~ "Desaturation",
+    stat_event == 5 ~ "Bronchospasm",
+    stat_event == 6 ~ "Laryngospasm",
+    stat_event == 99 ~ NA),
+    complication_anaes_type = as.factor(complication_anaes_type)) |> 
+    relocate(complication_anaes_type, .after = age_cat) 
+
+# Count number of complications per patient
+#retro_anaes_compl <- retro_anaes_compl |> 
+  #count(record_id)
+
+# Rename Bradycardia Interventions
+retro_anaes_compl <- retro_anaes_compl |> 
+  mutate(brady_int = case_when(
+    stat_brd_int == 1 ~ "None",
+    stat_brd_int == 2 ~ "Stimulation",
+    stat_brd_int == 3 ~ "Oxygen",
+    stat_brd_int == 4 ~ "Medication",
+    stat_brd_int == 5 ~ "HFNO",
+    stat_brd_int == 6 ~ "Intubation",
+    stat_brd_int == 7 ~ "Other"
+  )) |> 
+  relocate(brady_int, .after = complication_anaes_type)
+
+# Rename Hypotension Interventions
+retro_anaes_compl <- retro_anaes_compl |> 
+  mutate(hypo_int = case_when(
+    stat_hypo_int == 1 ~ "None",
+    stat_hypo_int == 2 ~ "Vasopressor",
+    stat_hypo_int == 3 ~ "Fluid Bolus",
+    stat_hypo_int == 4 ~ "CPR",
+    stat_hypo_int == 5 ~ "Intubation",
+    stat_hypo_int == 0 ~ "Other"
+  )) |> 
+  relocate(hypo_int, .after = brady_int)
+
+# Rename Apnoea Interventions
+retro_anaes_compl <- retro_anaes_compl |> 
+  mutate(apnoea_int = case_when(
+    stat_apn_int == 1 ~ "None",
+    stat_apn_int == 2 ~ "Stimulation",
+    stat_apn_int == 3 ~ "Oxygen",
+    stat_apn_int == 4 ~ "Positive Pressure Ventilation",
+    stat_apn_int == 5 ~ "CPR",
+    stat_apn_int == 6 ~ "Intubation",
+    stat_apn_int == 7 ~ "HFNO",
+    stat_apn_int == 0 ~ "Other"
+  )) |> 
+  relocate(apnoea_int, .after = hypo_int)
+
+# Rename Desaturation Interventions
+retro_anaes_compl <- retro_anaes_compl |> 
+  mutate(desat_int = case_when(
+    stat_des_int == 1 ~ "None",
+    stat_des_int == 2 ~ "Stimulation",
+    stat_des_int == 3 ~ "Oxygen",
+    stat_des_int == 4 ~ "Positive Pressure Ventilation",
+    stat_des_int == 5 ~ "CPR",
+    stat_des_int == 6 ~ "Intubation",
+    stat_des_int == 7 ~ "HFNO",
+    stat_des_int == 0 ~ "Other"
+  )) |> 
+  relocate(desat_int, .after = apnoea_int)
+
+# Rename Bronchospasm Interventions
+retro_anaes_compl <- retro_anaes_compl |> 
+  mutate(broncho_int = case_when(
+    stat_bro_int == 1 ~ "None",
+    stat_bro_int == 2 ~ "PEEP",
+    stat_bro_int == 3 ~ "Bronchodilators",
+    stat_bro_int == 4 ~ "NMBD",
+    stat_bro_int == 5 ~ "Intubation",
+    stat_bro_int == 0 ~ "Other"
+  )) |> 
+  relocate(broncho_int, .after = desat_int)
+
+# Rename Laryngospasm Interventions
+retro_anaes_compl <- retro_anaes_compl |> 
+  mutate(laryngo_int = case_when(
+    stat_lar_int == 1 ~ "None",
+    stat_lar_int == 2 ~ "PEEP",
+    stat_lar_int == 3 ~ "Propofol",
+    stat_lar_int == 4 ~ "NMBD",
+    stat_lar_int == 5 ~ "Intubation",
+    stat_lar_int == 0 ~ "Other"
+  )) |> 
+  relocate(laryngo_int, .after = broncho_int)
+
+# Table of Anaesthetic Complications
+anaes_compl_tbl <- retro_anaes_compl |> 
+  filter(age_cat == "≤ 27 Weeks") |> 
+  mutate(
+    apnoea_int = case_when(
+      stat_apn_int_othr=="intervention not documented"~ "Not Documented",
+      stat_apn_int_othr=="Sugamadex and patient not extubated for discharge to NICU"~ "T/F NICU Intubated",
+      .default= apnoea_int),
+    apnoea_int = forcats::fct_relevel(apnoea_int, "Not Documented", after = Inf),
+    desat_int = case_when(
+      stat_des_int_othr=="intervention not documented"~ "Not Documented",
+      stat_des_int_othr=="no specific documentation in anaesthetic chart"~ "Not Documented",
+      stat_des_int_othr=="increased Fi02"~ "↑FiO2",
+      .default= desat_int),
+    desat_int = forcats::fct_relevel(desat_int, "Not Documented", after = Inf),
+    hypo_int = case_when(
+      stat_hypo_int_othr=="no specific documentation in anaesthetic chart"~ "Not Documented",
+      .default= hypo_int),
+    hypo_int = forcats::fct_relevel(hypo_int, "Not Documented", after = Inf)) |> 
+  select(complication_anaes_type, apnoea_int, desat_int, hypo_int) |> 
+  tbl_summary(missing = "no",
+            label = list(
+              complication_anaes_type = "Type of Complication",
+              apnoea_int = "Intervention for Apnoea",
+              desat_int = "Intervention for Desaturation",
+              hypo_int = "Intervention for Hypotension")) |> 
+  bold_labels() |> 
+  italicize_labels() |> 
+  modify_footnote(all_stat_cols() ~ "2 patients had 2 distinct adverse events")
+
+```
+
+### Anaesthetic Complications
+```{r}
+anaes_compl_tbl
+```
+
+```{r, include=FALSE, warning=FALSE, message=FALSE}
+#==========================================TABLE 4: POST-OPERATIVE==========================================#
+# Import Post-Operative Data & Filter
+retro_postop <- readr::read_csv("~/Documents/Research/Projects/Current Projects/RetroNeo/Data/RetroNeo_Post_Op.csv") |> 
+  select(record_id, redcap_repeat_instrument, po_rsp:postoperative_complete) 
+
+# Filter Operative Arm (Without Complications) Only
+retro_postop <- retro_postop |> 
+  filter(is.na(redcap_repeat_instrument)) |> 
+  select(-c(redcap_repeat_instrument))
+
+# Merge age categories for table outputs
+retro_postop <- inner_join(retro_age_cat, retro_postop, by = "record_id") 
+
+# Change datetime to proper format
+retro_postop <- retro_postop |> 
+  mutate(po_rsp_time = as_datetime(po_rsp_time, format = '%d/%m/%Y %H:%M'),
+         po_rsp_time_stop = as_datetime(po_rsp_time_stop, format = '%d/%m/%Y %H:%M'))
+
+# Rename Type of Respiratory Support
+retro_postop <- retro_postop |> 
+  mutate(
+    postop_resp_supp = case_when(
+      po_rsp == 1 ~ "Yes",
+      po_rsp == 0 ~ "No"),
+    resp_supp_type = case_when(
+      po_rsp_y___1 == 1 ~ "LFNO",
+      po_rsp_y___2 == 1 ~ "HFNO",
+      po_rsp_y___3 == 1 ~ "CPAP",
+      po_rsp_y___4 == 1 ~ "Intubated",
+      po_rsp_y___5 == 1 ~ "HM O2",
+      po_rsp_y___0 == 1 ~ "Other",
+    postop_resp_supp == 0 ~ "None"),
+    resp_supp_type = replace_na(resp_supp_type, "None")) |> 
+  relocate(c(postop_resp_supp, resp_supp_type), .after = age_cat)
+
+# Duration of Respiratory Support
+retro_postop <- retro_postop |> 
+  mutate(
+    resp_supp_dur_mins = as.numeric(po_rsp_time_stop - po_rsp_time),
+    resp_supp_dur_hrs = as.numeric(po_rsp_time_stop - po_rsp_time, units = "hours")) |> 
+    #resp_supp_dur_mins = replace_na(resp_supp_dur_mins, 0),
+    #resp_supp_dur_hrs = replace_na(resp_supp_dur_hrs, 0)) |> 
+  relocate(c(resp_supp_dur_mins, resp_supp_dur_hrs), .after = resp_supp_type)
+
+# Rename Change in Respiratory Support
+retro_postop <- retro_postop |> 
+  mutate(resp_supp_change = case_when(
+    po_rsp_inc == 0 ~ "Decreased",
+    po_rsp_inc == 1 ~ "Increased",
+    po_rsp_inc == 2 ~ "Same"
+  )) |> 
+  relocate(resp_supp_change, .after = postop_resp_supp)
+
+# Post-Op Intubation or Retintubation
+retro_postop <- retro_postop |> 
+  mutate(
+    postop_intub = case_when(
+      
+      po_intu == 1 ~ "Yes",
+      po_intu == 0 ~ "No"),
+    postop_intub_from_ot = case_when(
+      po_rsp_y___4 == 1 ~ "Yes",
+      po_intu_sur == 1 ~ "Yes",
+      po_intu_sur == 0 ~ "No")
+    ) |> 
+  relocate(c(postop_intub, postop_intub_from_ot), .after = resp_supp_change)
+
+# Post-Op Analgesia
+retro_postop <- retro_postop |> 
+  mutate(
+    postop_analg = case_when(
+      po_analg == 1 ~ "Yes",
+      po_analg == 0 ~ "No"),
+    Paracetmol = case_when(
+      po_analg_drug___1 == 1 ~ "Yes",
+      po_analg_drug___1 == 0 ~ "No"),
+    NSAID = case_when(
+      po_analg_drug___2 == 1 ~ "Yes",
+      po_analg_drug___2 == 0 ~ "No"),
+    Opioid = case_when(
+      po_analg_drug___3 == 1 ~ "Yes",
+      po_analg_drug___3 == 0 ~ "No"),
+    Sucrose = case_when(
+      str_detect(po_analg_drug_othr, "ucrose") ~ "Yes",
+      po_analg_drug___0 == 1 ~ "Yes",
+      po_analg_drug___0 == 0 ~ "No"),
+    Sucrose = as.factor(Sucrose)) |> 
+  relocate(c(postop_analg:Sucrose), .after = postop_intub_from_ot)
+
+# PACU Details
+retro_postop <- retro_postop |> 
+  mutate(pacu = case_when(
+    po_rec_pacu == 1 ~ "Yes",
+    po_rec_pacu == 0 ~ "No")) |> 
+  relocate(pacu, .after = Sucrose)
+
+retro_postop <- retro_postop |> 
+  rename("pacu_dur" = po_rec_eot_dsc) |> 
+  relocate(pacu_dur, .after = pacu)
+
+# Post-Op Disposition
+retro_postop <- retro_postop |> 
+  mutate(disposition = case_when(
+    po_dest == 1 ~ "SCU",
+    po_dest == 2 ~ "PICU",
+    po_dest == 3 ~ "NICU",
+    po_dest == 4 ~ "Ward",
+    po_dest == 5 ~ "DSU",
+    po_dest == 6 ~ "Other Facility",
+    po_dest_othr == "Home" ~ "Home",
+    str_detect(po_dest_othr, "HDU") ~ "PICU",
+    str_detect(po_dest_othr, "Wards") ~ "Ward High Obs",
+    str_detect(po_dest_othr, "High Care") ~ "Ward High Obs",
+    str_detect(po_dest_othr, "Protection") ~ "Home")) |> 
+  relocate(disposition, .after = pacu_dur)
+
+# Create Variable Whether Post-Op Disposition is Different from Pre-Op
+# Extract Pre-Op Location from Demographic Dataset
+retro_preop_loc <- retro_dem |> select(record_id, dem_loc)
+
+# Merge Datasets
+retro_postop <- retro_postop |> 
+  inner_join(retro_preop_loc, retro_postop, by = "record_id")
+
+retro_postop <- retro_postop |> 
+  mutate(disposition_numerical = case_when(
+    disposition == "Home" ~ 0,
+    disposition == "DSU" ~ 1,
+    disposition == "Ward" ~ 2,
+    disposition == "Ward High Obs" ~ 3,
+    disposition == "SCU" ~ 4,
+    disposition == "NICU" ~ 5,
+    disposition == "PICU" ~ 5,
+    disposition == "Other Facility" ~ 5)) |> 
+  mutate(disposition_prior_numerical = case_when(
+    dem_loc == "Home/Residential Care" ~ 0,
+    dem_loc == "Hospital Ward" ~ 2,
+    dem_loc == "NICU" ~ 5,
+    dem_loc == "PICU" ~ 5,
+    dem_loc == "Special Care Nursery" ~ 4,
+    dem_loc == "Other Health Care Facility" ~ 5)) |> 
+  rowwise() |> 
+  mutate(disposition_diff = disposition_numerical - disposition_prior_numerical) |> 
+  mutate(disposition_change = case_when(
+    disposition_diff < 0 ~ "Decreased",
+    disposition_diff == 0 ~ "Same",
+    disposition_diff > 0 ~ "Increased")) |> 
+  relocate(disposition_change, .after = disposition)
+
+# ICU Details
+# Readmission
+retro_postop <- retro_postop |> 
+  mutate(icu_readm = case_when(
+    po_dest_read == 1 ~ "Yes",
+    po_dest_read == 0 ~ "No")) |> 
+  relocate(icu_readm, .after = disposition_change)
+
+# No NICU/PICU Readmissions #
+
+# Unplanned ICU Admission
+retro_postop <- retro_postop |> 
+  mutate(unplanned_icu = case_when(
+    po_icu_unplnd == 1 ~ "Yes",
+    po_icu_unplnd == 0 ~ "No"),
+  unplanned_icu_reason = case_when(
+    po_icu_unplnd_y == 1 ~ "Respiratory",
+    po_icu_unplnd_y == 2 ~ "Surgical",
+    str_detect(po_icu_unplnd_y_othr, "sepsis") ~ "Metabolic/Sepsis",
+    str_detect(po_icu_unplnd_y_othr, "metabolic") ~ "Metabolic/Sepsis",
+    str_detect(po_icu_unplnd_y_othr, "time") ~ "Time of Day")) |> 
+  relocate(c(unplanned_icu, unplanned_icu_reason), .after = icu_readm)
+
+# Hospital LOS
+retro_postop <- retro_postop |> 
+  mutate(hosp_los = if_else(is.na(po_hos_adm_dura), po_hos_adm_dura_rch, po_hos_adm_dura)) |> 
+  mutate(hosp_los_days = hosp_los/24) |> 
+  relocate(c(hosp_los, hosp_los_days), .after = unplanned_icu_reason)
+  
+# Hospital & Surgical Readmission
+retro_postop <- retro_postop |> 
+  mutate(
+    hosp_readm = case_when(
+      po_read == 1 ~ "Yes",
+      po_read == 0 ~ "No"),
+    surg_return = case_when(
+      po_read_sur == 1 ~ "Yes",
+      po_read_sur == 0 ~ "No"),
+    hosp_readm_reason = case_when(
+      str_detect(po_read_y, "pnoea") ~ "Respiratory",
+      str_detect(po_read_y, "COVID") ~ "Respiratory",
+      str_detect(po_read_y, "Bronchiolitis") ~ "Respiratory",
+      str_detect(po_read_y, "Unsettled") ~ "Unsettled",
+      str_detect(po_read_y, "ernia") ~ "Surgical",
+      str_detect(po_read_y, "Irritable") ~ "Unsettled",
+      str_detect(po_read_y, "Urinary") ~ "UTI",
+      str_detect(po_read_y, "eeding") ~ "Feeding",
+      str_detect(po_read_y, "respiratory") ~ "Respiratory",
+      str_detect(po_read_y, "nasogastric") ~ "Feeding",
+      str_detect(po_read_y, "vomiting") ~ "Feeding"),
+    surg_return_reason = case_when(
+      str_detect(po_read_sur_y, "adhesions") ~ "Adhesiolysis",
+      str_detect(po_read_sur_y, "hernia") ~ "Re-Do Hernia Repair")) |> 
+  relocate(c(hosp_readm, hosp_readm_reason, surg_return, surg_return_reason), .after = hosp_los) 
+
+
+retro_postop <- retro_postop |> 
+  filter(age_cat == "≤ 27 Weeks",
+        record_id != "296-2")
+
+postop_analgesia_tbl <- retro_postop |> 
+  filter(age_cat == "≤ 27 Weeks") |> 
+  select(postop_analg, Paracetmol, NSAID, Opioid, Sucrose) |> 
+  tbl_summary(missing="no",
+      label = list(
+        postop_analg = "Post-Operative Analgesia")) |> 
+  bold_labels() |> 
+  italicize_labels()     
+
+postop_resp_tbl <- retro_postop |> 
+  filter(age_cat == "≤ 27 Weeks",
+        record_id != "296-2") |>  
+  mutate(po_dc_oxygen = case_when(
+    po_rsp_oxy== 1 ~ "Yes",
+    po_rsp_oxy== 0 ~ "No"),
+    po_dc_oxygen = replace_na(po_dc_oxygen, "No"),
+    mort = if_else(record_id == "294-13", 1,0),
+    resp_supp_free_days = case_when(
+      mort == 1 ~ 0,
+      po_rsp_oxy== 1 ~ 0,
+      postop_resp_supp == "No" ~ hosp_los,
+      postop_resp_supp == "Yes" ~ (hosp_los - resp_supp_dur_hrs)),
+    resp_supp_free_days = resp_supp_free_days/24) |> 
+  select(postop_resp_supp, resp_supp_change, resp_supp_type, resp_supp_dur_hrs, resp_supp_free_days, po_dc_oxygen) |> 
+  tbl_summary(missing="no",
+        label = list(
+          postop_resp_supp = "Post-Operative Respiratory Support",
+          resp_supp_change = "Change in Respiratory Support from Pre-Operative",
+          resp_supp_type = "Post-Operative Respiratory Support Type",
+          resp_supp_dur_hrs = "Post-Operative Respiratory Support Duration (Hrs)",
+          po_dc_oxygen = "Discharge Home on Supplemental Oxygen",
+          resp_supp_free_days = "Respiratory Support-Free Days")) |> 
+  bold_labels() |> 
+  italicize_labels()
+
+# Plot Respiratory Support-Free Days
+rsfd_plot <- retro_postop |> 
+    mutate(mort = if_else(record_id == "294-13", 1,0),
+    resp_supp_free_days = case_when(
+      mort == 1 ~ 0,
+      po_rsp_oxy== 1 ~ 0,
+      resp_supp_type == "None" ~ hosp_los,
+      postop_resp_supp == "Yes" ~ (hosp_los - resp_supp_dur_hrs)),
+    resp_supp_free_days = resp_supp_free_days/24,
+    resp_supp_free_days = round(resp_supp_free_days, 0)) |> 
+    filter(!is.na(resp_supp_free_days)) |> 
+  ggplot(aes(x = resp_supp_free_days, color = resp_supp_free_days))+
+    geom_bar(fill = "darkolivegreen2")+
+    coord_cartesian(xlim=c(0,30))+
+    theme_bw()+
+    labs(y= NULL , x = "Post-Operative Days", title = "Respiratory Support-Free Days", subtitle = "Censored at 30 Days") #"For PMA ≤ 27 Weeks, 
+    
+
+
+postop_outcome_tbl <- retro_postop |> 
+  #filter(age_cat == "≤ 27 Weeks") |> 
+  select(pacu, pacu_dur, disposition, disposition_change, hosp_los_days, hosp_readm, hosp_readm_reason) |> 
+  tbl_summary(missing="no",
+      label = list(
+          pacu = "Transferred to PACU",
+          pacu_dur = "Time Duration in PACU (Mins)",
+          disposition = "Post-Operative Disposition",
+          disposition_change = "Change in Disposition Compared to Pre-Operatively",
+          hosp_los_days = "Hospital LOS (Days)",
+          hosp_readm = "Hospital Readmissions",
+          hosp_readm_reason = "Hospital Readmission Reason")) |> 
+  bold_labels() |> 
+  italicize_labels()
+
+
+```
+
+### Post-Operative Management
+#### Analgesia
+```{r}
+postop_analgesia_tbl
+```
+
+#### Post-Operative Respiratory Support
+```{r}
+postop_resp_tbl
+```
+
+#### Respiratory Support-Free Days
+```{r}
+rsfd_plot
+```
+```{r, include=FALSE}
+#==========================================TABLE 5: POST-OPERATIVE COMPLICATIONS==========================================#
+# Import Post-Operative Data & Filter
+retro_postop_compl <- readr::read_csv("~/Documents/Research/Projects/Current Projects/RetroNeo/Data/RetroNeo_Post_Op.csv") |> 
+  select(record_id, redcap_repeat_instrument, stat_event:complications_complete) 
+
+# Filter Operative Arm (Without Complications) Only
+retro_postop_compl <- retro_postop_compl |> 
+  filter(redcap_repeat_instrument == "complications") |> 
+  select(-c(redcap_repeat_instrument))
+
+# Merge age categories for table outputs
+retro_postop_compl <- inner_join(retro_age_cat, retro_postop_compl, by = "record_id") |> 
+  filter(age_cat == "≤ 27 Weeks")
+
+# Rename Post-Operative Complications
+retro_postop_compl <- retro_postop_compl |> 
+  mutate(complication_postop_type = case_when(
+    stat_event == 0 ~ "None",
+    stat_event == 1 ~ "Bradycardia",
+    stat_event == 2 ~ "Hypotension",
+    stat_event == 3 ~ "Apnoea",
+    stat_event == 4 ~ "Desaturation",
+    stat_event == 5 ~ "Bronchospasm",
+    stat_event == 6 ~ "Laryngospasm",
+    stat_event == 99 ~ "Respiratory Acidosis"),
+    complication_postop_type = replace_na(complication_postop_type, "None"),
+    complication_postop_type = as.factor(complication_postop_type),
+    complication_postop_type = forcats::fct_relevel(complication_postop_type, "None", after = Inf))|> 
+    relocate(complication_postop_type, .after = age_cat) 
+
+# Rename Complication Timing for each complication
+retro_postop_compl <- retro_postop_compl |> 
+  mutate(
+    brady_time = case_when(
+      stat_brady_time == 0 ~ "Intra-Operative",
+      stat_brady_time == 1 ~ "≤12h Post-Operative",
+      stat_brady_time == 2 ~ "12-48h Post-Operative"),
+    apnoea_time = case_when(
+      stat_apn_time == 0 ~ "Intra-Operative",
+      stat_apn_time == 1 ~ "≤12h Post-Operative",
+      stat_apn_time == 2 ~ "12-48h Post-Operative"),
+    desat_time = case_when(
+      stat_des_time == 0 ~ "Intra-Operative",
+      stat_des_time == 1 ~ "≤12h Post-Operative",
+      stat_des_time == 2 ~ "12-48h Post-Operative")) |> 
+  relocate(c(brady_time:desat_time), .after = complication_postop_type) 
+
+# Rename Complication Timing
+retro_postop_compl <- retro_postop_compl |> 
+  mutate(compl_timing = case_when(
+    brady_time == "≤12h Post-Operative" ~ "≤12h Post-Operative",
+    apnoea_time == "≤12h Post-Operative" ~ "≤12h Post-Operative",
+    desat_time == "≤12h Post-Operative" ~ "≤12h Post-Operative",
+    brady_time == "12-48h Post-Operative" ~ "12-48h Post-Operative",
+    apnoea_time == "12-48h Post-Operative" ~ "12-48h Post-Operative",
+    desat_time == "12-48h Post-Operative" ~ "12-48h Post-Operative")) |> 
+  relocate(compl_timing, .after = complication_postop_type) 
+
+# Rename Bradycardia Interventions
+retro_postop_compl <- retro_postop_compl |> 
+  mutate(brady_int = case_when(
+    stat_brd_int == 1 ~ "None",
+    stat_brd_int == 2 ~ "Stimulation",
+    stat_brd_int == 3 ~ "↑FiO2",
+    stat_brd_int == 4 ~ "Medication",
+    stat_brd_int == 5 ~ "HFNO",
+    stat_brd_int == 6 ~ "Intubation",
+    stat_brd_int == 0 ~ "Caffeine"),
+    brady_int = forcats::fct_relevel(brady_int, "None", after = Inf))|> 
+  relocate(brady_int, .after = brady_time)
+
+# Rename Apnoea Interventions
+retro_postop_compl <- retro_postop_compl |> 
+  mutate(apnoea_int = case_when(
+    stat_apn_int == 1 ~ "None",
+    stat_apn_int == 2 ~ "Stimulation",
+    stat_apn_int == 3 ~ "↑FiO2",
+    stat_apn_int == 4 ~ "Positive Pressure Ventilation",
+    stat_apn_int == 5 ~ "CPR",
+    stat_apn_int == 6 ~ "Intubation",
+    stat_apn_int == 7 ~ "HFNO",
+    stat_apn_int == 0 ~ "Caffeine"),
+    apnoea_int = forcats::fct_relevel(apnoea_int, "None", after = Inf))|>  
+  relocate(apnoea_int, .after = apnoea_time)
+
+# Rename Desaturation Interventions
+retro_postop_compl <- retro_postop_compl |> 
+  mutate(desat_int = case_when(
+    stat_des_int == 1 ~ "None",
+    stat_des_int == 2 ~ "Stimulation",
+    stat_des_int == 3 ~ "↑FiO2",
+    stat_des_int == 4 ~ "Positive Pressure Ventilation",
+    stat_des_int == 5 ~ "CPR",
+    stat_des_int == 6 ~ "Intubation",
+    stat_des_int == 7 ~ "HFNO",
+    str_detect(stat_des_int_othr, "SpO2") ~ "↑FiO2",
+    str_detect(stat_des_int_othr, "FiO2") ~ "↑FiO2, Recruitment Manoeuvre"),
+    desat_int = forcats::fct_relevel(desat_int, "None", after = Inf))|> 
+  relocate(desat_int, .after = desat_time)
+
+# Table of Post-Operative Complications
+postop_compl_tbl <- retro_postop_compl |> 
+  filter(age_cat == "≤ 27 Weeks") |> 
+  select(complication_postop_type,brady_int, apnoea_int, desat_int, compl_timing) |> 
+  tbl_summary(by = compl_timing, missing = "no",
+            label = list(
+              complication_postop_type = "Type of Complication",
+              brady_int = "Intervention for Bradycardia",
+              apnoea_int = "Intervention for Apnoea",
+              desat_int = "Intervention for Desaturation",
+              hypo_int = "Intervention for Hypotension")) |> 
+  add_overall(last = FALSE) |> 
+  modify_table_body(~.x |> dplyr::relocate(stat_0, .after = label)) |>  
+  modify_spanning_header( c(stat_1, stat_2) ~ "**Post-Operative Period**") |> 
+  bold_labels()
+
+```
+
+#### Post-Operative Complications
+```{r}
+postop_compl_tbl
+```
+
+
+#### Post-Operative Hospital Outcomes
+```{r}
+postop_outcome_tbl
+```
+
+
+```{r, include=FALSE}
+#==========================================TABLE 5: POST-OPERATIVE ADVERSE EVENTS==========================================#
+# Import Adverse Events Data & Filter
+retro_adverse <- readr::read_csv("~/Documents/Research/Projects/Current Projects/RetroNeo/Data/RetroNeo_Adverse.csv") |> 
+  select(record_id, ae_yn:adverse_events_complete) 
+
+# Merge age categories for table outputs
+retro_adverse <- inner_join(retro_age_cat, retro_adverse, by = "record_id")
+
+retro_adverse_tbl <- retro_adverse |> 
+  filter(age_cat == "≤ 27 Weeks") |> 
+  mutate(
+    adverse = case_when(
+      ae_yn == 1 ~ "Yes",
+      ae_yn == 0 ~ "No"),
+    adverse_timepoint = case_when(
+      ae_visit == 1 ~ "Pre-Operative",
+      ae_visit == 2 ~ "Intra-Operative",
+      ae_visit == 3 ~ "Post-Operative"),
+    adverse_type = case_when(
+      ae_type == 1 ~ "Death",
+      str_detect(ae_type_othr, "intubation") ~ "Difficult Intubation",
+      str_detect(ae_type_othr, "infusion") ~ "Transfusion",
+      str_detect(ae_type_othr, "infection") ~ "Wound Infection",
+      str_detect(ae_type_othr, "Multiple") ~ "Feeding Issues",
+      str_detect(ae_type_othr, "Febrile") ~ "Viral Respiratory Infection")) |> 
+  relocate(c(adverse, adverse_timepoint, adverse_type), .after = age_cat) |> 
+  select(record_id:adverse_type) |> 
+  filter(!is.na(adverse_timepoint)) |> 
+  select(adverse_timepoint, adverse_type) |> 
+  rename("Adverse Event Timepoint"=adverse_timepoint,
+         "Adverse Event Type"=adverse_type) |> 
+  mutate("Number" = str_count("Adverse Event Type", ",")+1) |> 
+  gt()
+
+```
+### Post-Operative Adverse Events
+
+```{r}
+retro_adverse_tbl
+```
+
+
+
