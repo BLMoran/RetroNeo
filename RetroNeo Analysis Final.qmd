@@ -1,0 +1,1059 @@
+---
+title: "Retrospective Cohort Study of Outcomes for Neonates and Infants Undergoing Inguinal Hernia Surgery at Multiple Australian and New Zealand Hospitals: The RetroNeo Study." 
+subtitle: "Statistical Analysis"
+author: "Dr Benjamin Moran, MBBS, BMedSci (Hons), MMedStats, FCICM, FANZCA"
+date: today
+format:   
+  html:
+    embed-resources: true
+    grid: 
+      body-width: 1000px
+      sidebar-width: 200px
+      margin-width: 100px
+      gutter-width: 0.5rem
+execute:
+  cache: true
+toc: true
+toc-location: left
+toc-depth: 5
+number-sections: true
+theme: yeti
+---
+
+
+## Introduction
+This is the statistical analysis that accompanies the RetroNeo study, which examines the anaesthetic techniques and perioperative outcomes of neonates and infants undergoing inguinal hernia surgery.
+
+## Results
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(gt)
+library(gtsummary)
+
+# knitr options
+knitr::opts_chunk$set(echo = F, message = F, warning = F, error = T, out.width = "90%", dev = "png", dpi = 300, cache = T)
+
+#==========================================TABLE 1: DEMOGRAPHICS==========================================#
+
+# Import data
+load("retro_wrangled.RData")
+
+# Source functions
+source("Functions.r")
+
+# Generate Table 1 (with removed subsequent surgeries)
+retro_tbl <- retro |> 
+  filter(second_surg_index == 0)
+
+tbl_dem <- retro_tbl |>  
+  select(age_pma_wks, dem_sex, dem_wgt, dem_loc, resp_support_prior, mhx_nicu, mhx_iugr, mhx_ivh, mhx_retin, mhx_ccd, mhx_cld, mhx_apn, mhx_intu, mhx_rsp, mhx_caff,  age_cat) |>  
+    tbl_summary(by = age_cat, missing = "no",
+            label = list(
+              age_pma_wks = "Post-Menstrual Age at Birth in Weeks (Median (IQR))",
+              dem_sex = "Male Sex (N (%))",
+              dem_wgt = "Weight at Birth in Grams (Median (IQR))",
+              dem_loc = "Location Prior to Day of Surgery",
+              mhx_nicu = "NICU Admission Between Birth & Surgery",
+              mhx_iugr = "Intrauterine Growth Restriction (IUGR)",
+              mhx_ivh = "Intraventricular Haemorrhage (IVH)",
+              mhx_retin = "Retinopathy of Prematurity",
+              mhx_ccd = "Congenital Cardiac Disease",
+              mhx_cld = "Chronic Lung Disease",
+              mhx_apn = "History of Apnoea (Any Aetiology)",
+              mhx_intu = "History of Invasive Ventilation",
+              mhx_rsp = "Respiratory Support at Surgery",
+              mhx_caff = "History of Caffeine Use",
+              resp_support_prior = "Respiratory Support Prior to Surgery"),
+            value = list(
+              dem_sex ~ 1,
+              mhx_nicu ~ 1,
+              mhx_iugr ~ 1,
+              mhx_ivh ~ 1,
+              mhx_retin ~ 1,
+              mhx_ccd ~ 1,
+              mhx_cld ~ 1,
+              mhx_apn ~ 1,
+              mhx_intu ~ 1,
+              mhx_rsp ~ 1,
+              mhx_caff ~ 1),
+            statistic = list(
+              dem_sex ~ "{n} ({p}%)"
+              ))|> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  add_overall() |> 
+  bold_labels() |> 
+  italicize_labels() |>
+  remove_row_type(resp_support_prior,type = "level", level_value = "None") |> 
+  as_gt() |> 
+    tab_row_group(
+      label = md("***Medical History***"),
+      rows = 17:25
+  ) |> 
+    row_group_order(groups = c(NA, "***Medical History***")) |> 
+    tab_style(
+      style = cell_fill(color = "gray95"),
+      locations = cells_row_groups(groups = "***Medical History***")
+  ) |> 
+    tab_style(
+    style = cell_text(align = "left", indent = px(20)),
+    locations = cells_body(columns = everything(),
+    rows = 17:25)
+  )
+```
+
+### Demographics
+
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_dem
+```
+
+
+```{r, include=FALSE, warning=FALSE, message=FALSE}
+#==========================================TABLE 2: SURGERY==========================================#
+tbl_surg <- retro_tbl |>  
+  select(age_pma_wks, age_pma_surg_wks, dem_wgt, sur_wgt, sur_hernia, sur_type, sur_incarc, surgeries_in_group, sur_asspro, total_dur, anaes_dur, surg_dur, pacu, pacu_dur, age_cat) |>  
+    tbl_summary(by = age_cat, missing = "no",
+            label = list(
+              age_pma_wks = "Post-Menstrual Age at Birth in Weeks (Median (IQR))",
+              age_pma_surg_wks = "Post-Menstrual Age at Surgery in Weeks (Median (IQR))",
+              dem_wgt = "Median Weight at Birth (Grams)",
+              sur_wgt = "Median Weight at Surgery (Grams)",
+              sur_hernia = "Type of Hernia Repair",
+              sur_type = "Surgical Approach",
+              sur_incarc = "Incarcerated Hernia",
+              surgeries_in_group = "Number of Surgeries in Index Admission",
+              sur_asspro = "Additional Associated Procedure",
+              total_dur = "Median Total Duration (Mins)",
+              anaes_dur = "Median Anaesthetic Duration (Mins)",
+              surg_dur = "Median Surgical Duration (Mins)",
+              pacu = "Transferred to PACU",
+              pacu_dur = "Median Time Duration in PACU (Mins)"),
+            value = list(
+              sur_incarc ~ 1,
+              sur_asspro ~ 1,
+              pacu ~ "Yes"))|> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  add_overall() |> 
+  bold_labels() |> 
+  italicize_labels()
+```
+
+### Surgical Details
+
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_surg
+```
+
+
+```{r, include=FALSE, warning=FALSE, message=FALSE}
+#==========================================TABLE 3: ANAESTHETICS==========================================#
+# Calculate the TRUE overall N for each age category across ALL strata
+overall_age_n <- retro |>
+  dplyr::count(age_cat) |>
+  tidyr::pivot_wider(names_from = age_cat, values_from = n) |> 
+  dplyr::mutate(Overall = sum(`≤ 27 Weeks`, `28-32 Weeks`, `33-36 Weeks`, `≥37 Weeks`))
+
+# Anaesthetic Type Tables
+tbl_ga_all <- tbl_ga_fn(anaes_group = "all")
+tbl_ga_ga <- tbl_ga_fn(anaes_group = "GA")
+tbl_ga_spinal <- tbl_ga_fn(anaes_group = "Spinal")
+tbl_ga_caudal <- tbl_ga_fn(anaes_group = "Caudal")
+
+# Intraop Analgesia
+tbl_ga_intraop_analg <- tbl_intraop_analg_fn("GA Only")
+tbl_ga_caud_intraop_analg <- tbl_intraop_analg_fn("GA + Caudal")
+tbl_ga_spi_intraop_analg <- tbl_intraop_analg_fn("GA + Spinal")
+tbl_spi_intraop_analg <- tbl_intraop_analg_fn("Spinal Only")
+tbl_spi_sed_intraop_analg <- tbl_intraop_analg_fn("Spinal + Sedation")
+tbl_caud_intraop_analg <- tbl_intraop_analg_fn("Caudal Only")
+tbl_caud_sed_intraop_analg <- tbl_intraop_analg_fn("Caudal + Sedation")
+
+# Stack Tables
+tbl_intraop_analg <- tbl_stack(
+  tbls = list(tbl_ga_intraop_analg, tbl_ga_caud_intraop_analg, tbl_ga_spi_intraop_analg, tbl_spi_intraop_analg, tbl_spi_sed_intraop_analg, tbl_caud_intraop_analg, tbl_caud_sed_intraop_analg)) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  modify_spanning_header(stat_0 ~ NA) |> 
+  modify_footnote(everything() ~ NA) |> 
+  modify_header(
+    label ~ "**Anaesthetic Type**",
+    stat_1 ~ paste0("**≤ 27 Weeks**", "<br>", "N = ", overall_age_n$`≤ 27 Weeks`),
+    stat_2 ~ paste0("**28-32 Weeks**", "<br>", "N = ", overall_age_n$`28-32 Weeks`),
+    stat_3 ~ paste0("**33-36 Weeks**", "<br>", "N = ", overall_age_n$`33-36 Weeks`),
+    stat_4 ~ paste0("**≥37 Weeks**", "<br>", "N = ", overall_age_n$`≥37 Weeks`),
+    stat_0 ~ paste0("**Overall**", "<br>", "N = ", nrow(retro))) |> 
+  modify_table_body(
+    ~ .x |>
+      dplyr::mutate(
+        across(starts_with("stat_"), ~ stringr::str_replace_all(., "^0 \\(.*\\)$", "0")))) |> 
+  as_gt() |>
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey80"),
+    locations = gt::cells_body(
+      rows = c(1, 5, 9, 13, 17, 21, 25)))
+
+
+tbl_spinal <- retro |>  
+  filter(spinal == "1") |> 
+  mutate(
+    spinal_drug_conc_comb = paste(spinal_drug, spinal_drug_conc, sep = " "),
+    spinal_drug_conc_comb = case_when(str_detect(spinal_drug_conc_comb, "NA") ~ "Unknown",
+                                      .default = spinal_drug_conc_comb),
+    spinal_drug_conc_comb = factor(spinal_drug_conc_comb, levels = c("Bupivacaine 0.25%", "Bupivacaine 0.5%", "Levobupivacaine 0.5%", "Levobupivacaine 0.7%", "Ropivacaine 0.2%", "Unknown"))) |> 
+  select(spinal_drug_conc_comb, spinal_attempts, spinal_complications, spinal_ga_conv, sedation, sed_prop, sed_dexmede, sed_no2, sed_sucrose, airway_type,  age_cat) |>  
+    tbl_summary(by = age_cat, missing = "no",
+            label = list(
+              spinal_drug_conc_comb = "Spinal Local Anaesthetic (Drug (Concentration))",
+              spinal_attempts = "Number of Attempts",
+              spinal_complications = "Complications",
+              spinal_ga_conv = "Conversion to GA",
+              sedation = "Adjuvant Sedation Used",
+              sed_prop = "Propofol Sedation",
+              sed_dexmede = "Dexmedetomidine Sedation",
+              sed_no2 = "NO2",
+              sed_sucrose = "Sucrose",
+              airway_type = "Type of Airway"),
+            value = list(
+              sedation ~ 1,
+              sed_prop ~ 1,
+              sed_dexmede ~ 1,
+              sed_no2 ~ 1,
+              sed_sucrose ~ 1,
+              spinal_ga_conv ~ 1))|> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  add_overall() |> 
+  bold_labels() |> 
+  italicize_labels() |>     
+  modify_table_body(
+      ~ .x |>
+        dplyr::mutate(
+          across(starts_with("stat_"), ~ stringr::str_replace_all(., "^0 \\(.*\\)$", "0"))))
+
+tbl_caudal <- retro |>  
+  filter(caudal == "1") |> 
+  mutate(
+    caudal_drug_conc_comb = paste(caudal_drug, caudal_drug_conc, sep = " "),
+    caudal_drug_conc_comb = case_when(str_detect(caudal_drug_conc_comb, "NA") ~ "Unknown",
+                                      .default = caudal_drug_conc_comb),
+    caudal_drug_conc_comb = factor(caudal_drug_conc_comb, levels = c("Bupivacaine 0.25%", "Bupivacaine 0.5%","Levobupivacaine 0.2%", "Levobupivacaine 0.25%", "Ropivacaine 0.1%", "Ropivacaine 0.2%", "Ropivacaine 0.3%", "Unknown")),
+    caudal_attempts = na_if(caudal_attempts, "0"),
+    caudal_attempts = na_if(caudal_attempts, "99"),
+    caudal_attempts = na_if(caudal_attempts, "9999"),
+    caudal_sed_type = case_when(
+      sed_dexmede == "1" & sed_prop == "0" ~ "Dexmedetomidine",
+      #sed_dexmede == "0" & sed_prop == "1" ~ "Propofol",
+      sed_dexmede == "1" & sed_prop == "1" ~ "Dexmedetomidine + Propofol"),
+    caudal_sed_type = factor(sed_type, levels = c("Dexmedetomidine", "Propofol", "Dexmedetomidine + Propofol")),
+    anaes_type2 = anaes_type) |> 
+  select(caudal_drug_conc_comb, caudal_add, caudal_attempts,  anaes_type, sedation, caudal_sed_type, anaes_type2, caudal_complications, caudal_ga_conv, sed_sucrose, airway_type, age_cat) |>  
+    tbl_summary(by = age_cat, missing = "no",
+            label = list(
+              caudal_drug_conc_comb = "Spinal Local Anaesthetic (Concentration)",
+              caudal_add = "Caudal Additives",
+              caudal_attempts = "Number of Attempts",
+              caudal_complications = "Complications",
+              caudal_ga_conv = "Conversion to GA",
+              anaes_type = "GA with Caudal",
+              sedation = "Adjuvant Sedation Used",
+              caudal_sed_type = "Type of Sedation (% of Those with Sedation)",
+              anaes_type2 = "Caudal Only",
+              sed_sucrose = "Sucrose",
+              airway_type = "Type of Airway"),
+            value = list(
+              sedation ~ 1,
+              sed_sucrose ~ 1,
+              caudal_ga_conv ~ 1,
+              anaes_type ~ "GA + Caudal",
+              anaes_type2 ~ "Caudal Only"))|> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  add_overall() |> 
+  bold_labels() |> 
+  italicize_labels() |> 
+  modify_table_body(
+      ~ .x |>
+        dplyr::mutate(
+          across(starts_with("stat_"), ~ stringr::str_replace_all(., "^0 \\(.*\\)$", "0"))))
+
+# Secondary Anaesthetic Table
+tbl_sec <- retro |> 
+  filter(sec_anaes == "1") |> 
+  select(anaes_type, reason_sec_anaes, sec_ga, sec_spinal, sec_caudal, sec_sed, age_cat) |> 
+  tbl_summary(by = age_cat, missing = "no",
+            label = list(
+              anaes_type = "Primary Anaesthetic",
+              reason_sec_anaes = "Reason for Secondary Anaesthetic",
+              sec_ga = "Secondary GA",
+              sec_spinal = "Secondary Spinal",
+              sec_caudal = "Secondary Caudal",
+              sec_sed = "Secondary Sedation"),
+            value = list(
+              sec_ga ~ 1,
+              sec_spinal ~ 1,
+              sec_caudal ~ 1,
+              sec_sed ~ 1))|> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  add_overall() |> 
+  bold_labels() |> 
+  italicize_labels() |> 
+  modify_table_body(
+      ~ .x |>
+        dplyr::mutate(
+          across(starts_with("stat_"), ~ stringr::str_replace_all(., "^0 \\(.*\\)$", "0"))))
+
+```
+
+### Intraoperative
+
+#### Details of Anaesthesia
+
+::: panel-tabset
+## Overall
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_ga_all
+```
+## GA-Based
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_ga_ga
+```
+
+## Spinal-Based
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_ga_spinal
+```
+
+## Caudal-Based
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_ga_caudal
+```
+
+## Spinal
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_spinal
+```
+
+## Caudal
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_caudal
+```
+
+## Intraoperative Analgesia
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_intraop_analg
+```
+
+## Secondary Anaesthetic
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_sec
+```
+
+## Anaesthetic Type: Graph
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+# Plot
+plot_anaes_type_overall <- retro |> 
+  dplyr::filter(!anaes_type %in% c("GA + Spinal + Caudal", "GA + Caudal + Sedation", NA)) |> 
+  group_by(anaes_type) |> 
+  summarise(num = n()) |>  
+  mutate(perc = num*100/sum(num)) |> 
+  mutate(perc = round(perc, 1)) |> 
+ggplot(aes(x = anaes_type, y = perc, fill = anaes_type))+
+  geom_col(position = "dodge")+
+  theme_bw()+
+  guides(fill="none")+
+  geom_text(aes(label = paste0(perc, "%")),
+            position = position_dodge(width = .9),
+            vjust = -0.7,
+            size = 3)+
+  labs(y = "Percent (%)", x = "Anaesthetic Type", title = "Anaesthetic Type", subtitle = "For All Age Categories",
+       fill = "Age Categories at Birth")+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))+
+  scale_fill_brewer(palette = "Blues", direction = -1)+
+  coord_cartesian(ylim=c(0,100))
+```
+
+```{r, message=FALSE, warning=FALSE, echo = F}
+plot_anaes_type_overall
+```
+
+## Anaesthetic Type: By Age
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+# Plot
+plot_anaes_type_age <- retro |> 
+  dplyr::filter(!anaes_type %in% c("Caudal Only", "GA + Spinal + Caudal", "GA + Caudal + Sedation", NA)) |> 
+  group_by(age_cat, anaes_type) |> 
+  summarise(num = n()) |>  
+  mutate(perc = num*100/sum(num)) |> 
+  mutate(perc = round(perc, 1)) |> 
+ggplot(aes(x = anaes_type, y = perc,  fill= age_cat))+
+  geom_col(position = "dodge")+
+  theme_bw()+
+  geom_text(aes(label = paste0(perc, "%")),
+            position = position_dodge(width = .9),
+            vjust = -0.7,
+            size = 1.8)+
+  labs(y = "Percent (%)", x = "Anaesthetic Type", title = "Anaesthetic Type", subtitle = "By Age Categories",
+       fill = "Age Categories at Birth")+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))+
+  scale_fill_brewer(palette = "Blues", direction = -1)+
+  coord_cartesian(ylim=c(0,100))
+```
+
+```{r, message=FALSE, warning=FALSE, echo = F}
+plot_anaes_type_age
+```
+
+## Airway Type: Overall
+```{r, message=FALSE, warning=FALSE, include = FALSE}
+plot_airway_overall <- retro |> 
+  filter(anaes_type %in% c("GA Only", "GA + Spinal", "GA + Caudal")) |> 
+  filter(airway_type != "None") |> 
+  group_by(airway_type) |> 
+  summarise(num = n()) |>  
+  mutate(perc = num*100/sum(num)) |> 
+  mutate(perc = round(perc, 1)) |> 
+ggplot(aes(x = airway_type, y = perc, fill= airway_type))+
+  geom_col(position = "dodge")+
+  theme_bw()+
+  guides(fill="none")+
+  geom_text(aes(label = paste0(perc, "%")),
+            position = position_dodge(width = .9),
+            vjust = -0.7,
+            size = 3)+
+  labs(y = "Percent (%)", x = "Airway", title = "Airway Type in Patients Receiving GA", subtitle = "For All Age Categories")+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))+
+  scale_fill_brewer(palette = "Gn", direction = -1)+
+  coord_cartesian(ylim=c(0,100))
+```
+
+```{r, message=FALSE, warning=FALSE, echo = F}
+plot_airway_overall
+```
+
+## Airway Type: By Age
+```{r, include=FALSE, warning=FALSE, message=FALSE}
+plot_airway_age <- retro |> 
+  filter(anaes_type %in% c("GA Only", "GA + Spinal", "GA + Caudal")) |> 
+  filter(airway_type != "None") |> 
+  group_by(age_cat, airway_type) |> 
+  summarise(num = n()) |>  
+  mutate(perc = num*100/sum(num)) |> 
+  mutate(perc = round(perc, 1)) |> 
+ggplot(aes(x = airway_type, y = perc, fill= age_cat))+
+  geom_col(position = "dodge")+
+  theme_bw()+
+  geom_text(aes(label = paste0(perc, "%")),
+            position = position_dodge(width = .9),
+            vjust = -0.7,
+            size = 2)+
+  labs(y = "Percent (%)", x = "Airway", title = "Airway Type in Patients Receiving GA", subtitle = "By Age Categories",
+       fill = "Age Categories")+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))+
+  scale_fill_brewer(palette = "Gn", direction = -1)+
+  coord_cartesian(ylim=c(0,100))
+```
+
+```{r, message=FALSE, warning=FALSE, echo = F}
+plot_airway_age
+```
+:::
+
+
+#### Complications
+Overall, there were 65 patients that had an intraoperative complication, with 73 separate complication events.
+```{r, include=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+
+# Number of complications per anaesthetic type
+tbl_overall_intraop_compl <- tbl_compl_fn("All")
+tbl_ga_intraop_compl <- tbl_compl_fn("GA Only")
+tbl_ga_caud_intraop_compl <- tbl_compl_fn("GA + Caudal")
+tbl_ga_spi_intraop_compl <- tbl_compl_fn("GA + Spinal")
+tbl_spi_intraop_compl <- tbl_compl_fn("Spinal Only")
+tbl_spi_sed_intraop_compl <- tbl_compl_fn("Spinal + Sedation")
+tbl_caud_intraop_compl <- tbl_compl_fn("Caudal Only")
+tbl_caud_sed_intraop_compl <- tbl_compl_fn("Caudal + Sedation")
+
+# Stack Tables
+tbl_number_intraop_compl <- tbl_stack(
+  tbls = list(tbl_overall_intraop_compl,tbl_ga_intraop_compl, tbl_ga_caud_intraop_compl, tbl_ga_spi_intraop_compl, tbl_spi_intraop_compl, tbl_spi_sed_intraop_compl, tbl_caud_intraop_compl, tbl_caud_sed_intraop_compl)) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  modify_spanning_header(stat_0 ~ NA) |> 
+  modify_footnote(everything() ~ NA) |> 
+  modify_header(label ~ "**Anaesthetic Type**") |> 
+  modify_table_body(
+    ~ .x |>
+      dplyr::mutate(
+        across(starts_with("stat_"), ~ stringr::str_replace_all(., "^0 \\(.*\\)$", "0")))) |> 
+  as_gt() |>
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey80"),
+    locations = gt::cells_body(rows = 1)) |>
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_body(rows = 1))
+
+# Type of Complications by anaesthetic type
+tbl_overall_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_intraop_", 1:3),
+  strata = "Overall",
+  label = "Overall")
+
+tbl_ga_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_intraop_", 1:3),
+  strata = "GA Only",
+  label = "GA Only",
+  add_n_to_label = TRUE)
+
+tbl_ga_caud_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_intraop_", 1:3),
+  strata = "GA + Caudal",
+  label = "GA + Caudal",
+  add_n_to_label = TRUE)
+
+# GA + Spinal- no complications
+
+tbl_spinal_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_intraop_", 1:3),
+  strata = "Spinal Only",
+  label = "Spinal Only",
+  add_n_to_label = TRUE)
+
+# Spinal + Sedation- no complications
+
+# Caudal Only- no complications
+
+tbl_caud_sed_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_intraop_", 1:3),
+  strata = "Caudal + Sedation",
+  label = "Caudal + Sedation",
+  add_n_to_label = TRUE)
+
+# Stack Tables
+tbl_intraop_compl_type <- tbl_stack(
+  tbls = list(tbl_overall_intraop_compl, tbl_ga_intraop_compl, tbl_ga_caud_intraop_compl, tbl_spinal_intraop_compl, tbl_caud_sed_intraop_compl)) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  modify_spanning_header(stat_0 ~ NA) |> 
+  modify_footnote(everything() ~ NA) |> 
+  modify_header(
+    label ~ "**Anaesthetic Type**",
+    stat_1 ~ paste0("**≤ 27 Weeks**", "<br>", "N = ", overall_age_n$`≤ 27 Weeks`),
+    stat_2 ~ paste0("**28-32 Weeks**", "<br>", "N = ", overall_age_n$`28-32 Weeks`),
+    stat_3 ~ paste0("**33-36 Weeks**", "<br>", "N = ", overall_age_n$`33-36 Weeks`),
+    stat_4 ~ paste0("**≥37 Weeks**", "<br>", "N = ", overall_age_n$`≥37 Weeks`),
+    stat_0 ~ paste0("**Overall**", "<br>", "N = ", nrow(retro))) |> 
+  as_gt() |>
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey80"),
+    locations = gt::cells_body(
+      rows = c(1, 7, 13, 19, 23)))
+
+
+# Complication Interventions
+# Generate Overall Row
+tbl_overall_intraop_compl_int <- tbl_overall_intraop_compl |> 
+  remove_row_type(complication_type, type = "level")
+
+# By Complication Type
+tbl_brady_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("brd_int_intraop_", 1:3),
+  strata = "Overall",
+  label = "Bradycardia",
+  intervention = TRUE)
+
+tbl_hypo_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("hypo_int_intraop_", 1:3),
+  strata = "Overall",
+  label ="Hypotension",
+  intervention = TRUE)
+
+tbl_apn_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("apn_int_intraop_", 1:3),
+  strata = "Overall",
+  label = "Apnoea",
+  intervention = TRUE)
+
+tbl_des_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("des_int_intraop_", 1:3),
+  strata = "Overall",
+  label = "Desaturation",
+  intervention = TRUE)
+
+# Bronchospasm- no intervention
+
+tbl_lar_intraop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("lar_int_intraop_", 1:3),
+  strata = "Overall",
+  label = "Larngospasm",
+  intervention = TRUE)
+
+# Stack Tables
+tbl_intraop_compl_int <- tbl_stack(
+  tbls = list(tbl_overall_intraop_compl_int, tbl_brady_intraop_compl, tbl_hypo_intraop_compl, tbl_apn_intraop_compl, tbl_des_intraop_compl, tbl_lar_intraop_compl), quiet = TRUE) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  modify_spanning_header(stat_0 ~ NA) |> 
+  modify_footnote(everything() ~ NA) |> 
+  modify_header(
+    label ~ "**Complication Type & Intervention**",
+    stat_1 ~ paste0("**≤ 27 Weeks**", "<br>", "N = ", overall_age_n$`≤ 27 Weeks`),
+    stat_2 ~ paste0("**28-32 Weeks**", "<br>", "N = ", overall_age_n$`28-32 Weeks`),
+    stat_3 ~ paste0("**33-36 Weeks**", "<br>", "N = ", overall_age_n$`33-36 Weeks`),
+    stat_4 ~ paste0("**≥37 Weeks**", "<br>", "N = ", overall_age_n$`≥37 Weeks`),
+    stat_0 ~ paste0("**Overall**", "<br>", "N = ", nrow(retro))) |> 
+  as_gt() |>
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey75"),
+    locations = gt::cells_body(
+      rows = c(1))) |> 
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey90"),
+    locations = gt::cells_body(
+      rows = c(2, 6, 12, 20, 26)))
+```
+
+::: panel-tabset
+## Number of Complications
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_number_intraop_compl
+```
+
+## Complication Type
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_intraop_compl_type
+```
+
+## Interventions
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_intraop_compl_int
+```
+:::
+
+
+```{r, include=FALSE, warning=FALSE, message=FALSE}
+#==========================================TABLE 4: POST-OPERATIVE==========================================#
+
+# Postop Analgesia
+tbl_ga_postop_analg <- tbl_postop_analg_fn("GA Only")
+tbl_ga_caud_postop_analg <- tbl_postop_analg_fn("GA + Caudal")
+tbl_ga_spi_postop_analg <- tbl_postop_analg_fn("GA + Spinal")
+tbl_spi_postop_analg <- tbl_postop_analg_fn("Spinal Only")
+tbl_spi_sed_postop_analg <- tbl_postop_analg_fn("Spinal + Sedation")
+tbl_caud_postop_analg <- tbl_postop_analg_fn("Caudal Only")
+tbl_caud_sed_postop_analg <- tbl_postop_analg_fn("Caudal + Sedation")
+
+# Stack Tables
+tbl_postop_analg <- tbl_stack(
+  tbls = list(tbl_ga_postop_analg, tbl_ga_caud_postop_analg, tbl_ga_spi_postop_analg, tbl_spi_postop_analg, tbl_spi_sed_postop_analg, tbl_caud_postop_analg, tbl_caud_sed_postop_analg)) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  modify_spanning_header(stat_0 ~ NA) |> 
+  modify_footnote(everything() ~ NA) |> 
+  modify_header(
+    label ~ "**Anaesthetic Type**",
+    stat_1 ~ paste0("**≤ 27 Weeks**", "<br>", "N = ", overall_age_n$`≤ 27 Weeks`),
+    stat_2 ~ paste0("**28-32 Weeks**", "<br>", "N = ", overall_age_n$`28-32 Weeks`),
+    stat_3 ~ paste0("**33-36 Weeks**", "<br>", "N = ", overall_age_n$`33-36 Weeks`),
+    stat_4 ~ paste0("**≥37 Weeks**", "<br>", "N = ", overall_age_n$`≥37 Weeks`),
+    stat_0 ~ paste0("**Overall**", "<br>", "N = ", nrow(retro))) |> 
+  modify_table_body(
+    ~ .x |>
+      dplyr::mutate(
+        across(starts_with("stat_"), ~ stringr::str_replace_all(., "^0 \\(.*\\)$", "0")))) |> 
+  as_gt() |>
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey80"),
+    locations = gt::cells_body(
+      rows = c(1, 5, 9, 13, 17, 21, 25)))
+
+
+postop_resp_tbl <- retro |> 
+  mutate(po_dc_oxygen = case_when(
+    po_rsp_oxy== 1 ~ "Yes",
+    po_rsp_oxy== 0 ~ "No"),
+    po_dc_oxygen = replace_na(po_dc_oxygen, "No"),
+    resp_supp_free_days = case_when(
+      ae_type == 1 ~ 0,
+      po_rsp_oxy== 1 ~ 0,
+      postop_resp_supp == "No" ~ hosp_los,
+      postop_resp_supp == "Yes" ~ (hosp_los - resp_supp_dur_hrs)),
+    resp_supp_free_days = resp_supp_free_days/24) |> 
+  select(postop_resp_supp, resp_supp_change, resp_supp_type, resp_supp_dur_hrs, resp_supp_free_days, po_dc_oxygen, age_cat) |> 
+  tbl_summary(by = age_cat, missing="no",
+        label = list(
+          postop_resp_supp = "Post-Operative Respiratory Support",
+          resp_supp_change = "Change in Respiratory Support from Pre-Operative",
+          resp_supp_type = "Post-Operative Respiratory Support Type",
+          resp_supp_dur_hrs = "Post-Operative Respiratory Support Duration (Hrs)",
+          po_dc_oxygen = "Discharge Home on Supplemental Oxygen",
+          resp_supp_free_days = "Respiratory Support-Free Days")) |> 
+  add_overall(last = FALSE) |> 
+  bold_labels() |> 
+  italicize_labels() |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**")
+
+# Plot Respiratory Support-Free Days
+# Anaesthetic Type
+rsfd_plot_overall <- rsfd_plot_fn(retro)
+rsfd_plot_ga <- rsfd_plot_fn(retro, strata_var = "anaes_type", strata_value = "GA Only")
+rsfd_plot_ga_spi <- rsfd_plot_fn(retro, strata_var = "anaes_type", strata_value = "GA + Spinal")
+rsfd_plot_ga_caud <- rsfd_plot_fn(retro, strata_var = "anaes_type", strata_value = "GA + Caudal")
+rsfd_plot_spi <- rsfd_plot_fn(retro, strata_var = "anaes_type", strata_value = "Spinal Only")
+rsfd_plot_spi_sed <- rsfd_plot_fn(retro, strata_var = "anaes_type", strata_value = "Spinal + Sedation")
+rsfd_plot_caud <- rsfd_plot_fn(retro, strata_var = "anaes_type", strata_value = "Caudal Only")
+rsfd_plot_caud_sed <- rsfd_plot_fn(retro, strata_var = "anaes_type", strata_value = "Caudal + Sedation")
+
+# Age Category
+rsfd_plot_27 <- rsfd_plot_fn(retro, strata_var = "age_cat", strata_value = "≤ 27 Weeks")
+rsfd_plot_28_32 <- rsfd_plot_fn(retro, strata_var = "age_cat", strata_value = "28-32 Weeks")
+rsfd_plot_33_36 <- rsfd_plot_fn(retro, strata_var = "age_cat", strata_value = "33-36 Weeks")
+rsfd_plot_37 <- rsfd_plot_fn(retro, strata_var = "age_cat", strata_value = "≥37 Weeks")
+
+
+postop_outcome_tbl <- retro |> 
+  select(disposition, disposition_change, hosp_los_days, hosp_readm, hosp_readm_reason, age_cat) |> 
+  tbl_summary(by = age_cat, missing="no",
+      label = list(
+          disposition = "Post-Operative Disposition",
+          disposition_change = "Change in Disposition Compared to Pre-Operatively",
+          hosp_los_days = "Median Hospital LOS (Days)",
+          hosp_readm = "Hospital Readmissions",
+          hosp_readm_reason = "Hospital Readmission Reason")) |> 
+  bold_labels() |> 
+  italicize_labels() |> 
+  add_overall(last = FALSE) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**")
+
+```
+
+### Post-Operative
+#### Outcomes
+
+::: panel-tabset
+## Outcomes
+```{r, message=FALSE, warning=FALSE, echo = F}
+postop_outcome_tbl
+```
+
+## Analgesia
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_analg
+```
+
+## Post-Operative Respiratory Support
+```{r, message=FALSE, warning=FALSE, echo = F}
+postop_resp_tbl
+```
+:::
+
+#### Respiratory Support-Free Days
+##### Anaesthetic Type
+::: panel-tabset
+## Overall
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_overall
+```
+
+## GA Only
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_ga
+```
+
+## GA + Spinal
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_ga_spi
+```
+
+## GA + Caudal
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_ga_caud
+```
+
+## Spinal Only
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_spi
+```
+
+## Spinal + Sedation
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_spi_sed
+```
+
+## Caudal Only
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_caud
+```
+
+## Caudal + Sedation
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_caud_sed
+```
+:::
+
+##### Age Categories
+::: panel-tabset
+## ≤ 27 Weeks
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_27
+```
+
+## 28-32 Weeks
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_28_32
+```
+
+## 33-36 Weeks
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_33_36
+```
+
+## ≥37 Weeks
+```{r, message=FALSE, warning=FALSE, echo = F}
+rsfd_plot_37
+```
+:::
+
+
+```{r, include=FALSE}
+#==========================================TABLE 5: POST-OPERATIVE COMPLICATIONS==========================================#
+
+# Postop Complicaation Numbers
+tbl_overall_postop_compl <- tbl_compl_fn("All", intraop = FALSE)
+tbl_ga_postop_compl <- tbl_compl_fn("GA Only", intraop = FALSE)
+tbl_ga_caud_postop_compl <- tbl_compl_fn("GA + Caudal", intraop = FALSE)
+tbl_ga_spi_postop_compl <- tbl_compl_fn("GA + Spinal", intraop = FALSE)
+tbl_spi_postop_compl <- tbl_compl_fn("Spinal Only", intraop = FALSE)
+tbl_spi_sed_postop_compl <- tbl_compl_fn("Spinal + Sedation", intraop = FALSE)
+tbl_caud_postop_compl <- tbl_compl_fn("Caudal Only", intraop = FALSE)
+tbl_caud_sed_postop_compl <- tbl_compl_fn("Caudal + Sedation", intraop = FALSE)
+
+# Stack Tables
+tbl_postop_compl <- tbl_stack(
+  tbls = list(tbl_overall_postop_compl,tbl_ga_postop_compl, tbl_ga_caud_postop_compl, tbl_ga_spi_postop_compl, tbl_spi_postop_compl, tbl_spi_sed_postop_compl, tbl_caud_postop_compl, tbl_caud_sed_postop_compl)) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  modify_spanning_header(stat_0 ~ NA) |> 
+  modify_footnote(everything() ~ NA) |> 
+  modify_header(label ~ "**Anaesthetic Type**") |> 
+  modify_table_body(
+    ~ .x |>
+      dplyr::mutate(
+        across(starts_with("stat_"), ~ stringr::str_replace_all(., "^0 \\(.*\\)$", "0")))) |> 
+  as_gt() |>
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey80"),
+    locations = gt::cells_body(rows = 1)) |>
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_body(rows = 1))
+
+# Complication Types per Anaesthetic Type
+tbl_overall_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_postop_", 1:5),
+  strata = "Overall",
+  label = "Overall")
+
+tbl_ga_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_postop_", 1:5),
+  strata = "GA Only",
+  label = "GA Only",
+  add_n_to_label = TRUE)
+
+tbl_ga_caud_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_postop_", 1:5),
+  strata = "GA + Caudal",
+  label = "GA + Caudal",
+  add_n_to_label = TRUE)
+
+tbl_ga_spi_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_postop_", 1:5),
+  strata = "GA + Spinal",
+  label = "GA + Spinal",
+  add_n_to_label = TRUE)
+
+
+tbl_spinal_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_postop_", 1:5),
+  strata = "Spinal Only",
+  label = "Spinal Only",
+  add_n_to_label = TRUE)
+
+tbl_spi_sed_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_postop_", 1:5),
+  strata = "Spinal + Sedation",
+  label = "Spinal + Sedation",
+  add_n_to_label = TRUE)
+
+# No Caudal Only 
+
+tbl_caud_sed_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("complication_type_postop_", 1:5),
+  strata = "Caudal + Sedation",
+  label = "Caudal + Sedation",
+  add_n_to_label = TRUE)
+
+# Stack Tables
+tbl_postop_compl_type <- tbl_stack(
+  tbls = list(tbl_overall_postop_compl, tbl_ga_postop_compl, tbl_ga_caud_postop_compl, tbl_ga_spi_postop_compl, tbl_spinal_postop_compl, tbl_spi_sed_postop_compl, tbl_caud_sed_intraop_compl)) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  modify_spanning_header(stat_0 ~ NA) |> 
+  modify_footnote(everything() ~ NA) |> 
+  modify_header(
+    label ~ "**Anaesthetic Type**",
+    stat_1 ~ paste0("**≤ 27 Weeks**", "<br>", "N = ", overall_age_n$`≤ 27 Weeks`),
+    stat_2 ~ paste0("**28-32 Weeks**", "<br>", "N = ", overall_age_n$`28-32 Weeks`),
+    stat_3 ~ paste0("**33-36 Weeks**", "<br>", "N = ", overall_age_n$`33-36 Weeks`),
+    stat_4 ~ paste0("**≥37 Weeks**", "<br>", "N = ", overall_age_n$`≥37 Weeks`),
+    stat_0 ~ paste0("**Overall**", "<br>", "N = ", nrow(retro))) |> 
+  as_gt() |>
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey80"),
+    locations = gt::cells_body(
+      rows = c(1, 11, 17, 24, 26, 33, 35)))
+
+
+# Postop Complication Timing
+tbl_postop_compl_timing_overall <- tbl_complication_timing(retro, strata = "Overall")
+tbl_postop_compl_timing_ga <- tbl_complication_timing(retro, strata = "GA Only")
+tbl_postop_compl_timing_ga_caud <- tbl_complication_timing(retro, strata = "GA + Caudal")
+tbl_postop_compl_timing_ga_spi <- tbl_complication_timing(retro, strata = "GA + Spinal")
+tbl_postop_compl_timing_spinal <- tbl_complication_timing(retro, strata = "Spinal Only")
+tbl_postop_compl_timing_spi_sed <- tbl_complication_timing(retro, strata = "Spinal + Sedation")
+# Caudal Only- no complications
+tbl_postop_compl_timing_caud_sed <- tbl_complication_timing(retro, strata = "Caudal + Sedation")
+
+# Complication Interventions
+# Generate Overall Row
+tbl_overall_postop_compl_int <- tbl_overall_postop_compl |> 
+  remove_row_type(complication_type, type = "level")
+
+# By Complication Type
+tbl_brady_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("brd_int_postop_", 1:5),
+  strata = "Overall",
+  label = "Bradycardia",
+  intervention = TRUE)
+
+# Hypotension- no intervention
+
+tbl_apn_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("apn_int_postop_", 1:5),
+  strata = "Overall",
+  label = "Apnoea",
+  intervention = TRUE)
+
+tbl_des_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("des_int_postop_", 1:5),
+  strata = "Overall",
+  label = "Desaturation",
+  intervention = TRUE)
+
+# Bronchospasm- no intervention
+
+tbl_lar_postop_compl <- tbl_complication_types_fn(
+  complication_cols = paste0("lar_int_postop_", 1:5),
+  strata = "Overall",
+  label = "Laryngospasm",
+  intervention = TRUE)
+
+# Stack Tables
+tbl_postop_compl_int <- tbl_stack(
+  tbls = list(tbl_overall_postop_compl_int, tbl_brady_postop_compl, tbl_apn_postop_compl, tbl_des_postop_compl, tbl_lar_postop_compl), quiet = TRUE) |> 
+  modify_spanning_header(all_stat_cols() ~ "**Age Categories at Birth**") |> 
+  modify_spanning_header(stat_0 ~ NA) |> 
+  modify_footnote(everything() ~ NA) |> 
+  modify_header(
+    label ~ "**Complication Type & Intervention**",
+    stat_1 ~ paste0("**≤ 27 Weeks**", "<br>", "N = ", overall_age_n$`≤ 27 Weeks`),
+    stat_2 ~ paste0("**28-32 Weeks**", "<br>", "N = ", overall_age_n$`28-32 Weeks`),
+    stat_3 ~ paste0("**33-36 Weeks**", "<br>", "N = ", overall_age_n$`33-36 Weeks`),
+    stat_4 ~ paste0("**≥37 Weeks**", "<br>", "N = ", overall_age_n$`≥37 Weeks`),
+    stat_0 ~ paste0("**Overall**", "<br>", "N = ", nrow(retro))) |> 
+  as_gt() |>
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey75"),
+    locations = gt::cells_body(
+      rows = c(1))) |> 
+  gt::tab_style(
+    style = gt::cell_fill(color = "grey90"),
+    locations = gt::cells_body(
+      rows = c(2, 9, 16, 30)))
+
+```
+
+
+#### Complications
+Overall, there were 87 patients that had a post-operative complication, with 129 post-operative complication events.
+
+::: panel-tabset
+## Number of Complications
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl
+```
+
+## Complication Type
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_type
+```
+
+## Intervention
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_int
+```
+:::
+
+#### Complication Timing
+
+::: panel-tabset
+## Overall
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_timing_overall
+```
+
+## GA
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_timing_ga
+```
+
+## GA + Caudal
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_timing_ga_caud
+```
+
+## GA + Spinal
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_timing_ga_spi
+```
+
+## Spinal Only
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_timing_spinal
+```
+
+## Spinal + Sedation
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_timing_spi_sed
+```
+
+## Caudal + Sedation
+```{r, message=FALSE, warning=FALSE, echo = F}
+tbl_postop_compl_timing_caud_sed
+```
+:::
+
+
+```{r, include=FALSE}
+#==========================================TABLE 6: ADVERSE EVENTS==========================================#
+
+retro_adverse_tbl <- retro |> 
+  filter(!is.na(adverse_timepoint)) |> 
+  select(age_cat, adverse_timepoint, adverse_type) |> 
+  arrange(age_cat) |> 
+  gt(groupname_col= "adverse_timepoint") |> 
+  tab_options(row_group.as_column = T) |> 
+  row_group_order(groups = c("Pre-Operative", "Intra-Operative", "Post-Operative")) |> 
+  cols_label(
+    age_cat = md("**Age Category**"),
+    adverse_type = md("**Adverse Event Type**"))
+
+```
+
+### Adverse Events
+There were 7 adverse events in the entire cohort.
+```{r, message=FALSE, warning=FALSE, echo = F}
+retro_adverse_tbl
+```
+
